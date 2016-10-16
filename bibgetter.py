@@ -1,6 +1,8 @@
+import os
 import sys
 
 import arxiv2bib
+import mr2bib
 
 # list of known citation commands
 commands = ["citation", "abx@aux@cite"]
@@ -50,23 +52,25 @@ class Cli(object):
       except IOError as e:
         print(e)
 
-    citations = {}
+    bib = []
 
     # all arXiv keys
     arXiv = filter(arxiv2bib.is_valid, keys)
-    print(arXiv)
+    bib = bib + [b for b in arxiv2bib.arxiv2bib(arXiv)]
 
+    MR = filter(mr2bib.is_valid, keys)
+    try:
+      bib = bib + [b for b in mr2bib.mr2bib(MR)]
+    except mr2bib.AuthenticationException:
+      self.messages.append("Not authenticated to Mathematical Reviews")
 
-
-  def create_output(self, bib):
-    """Format the output and error messages"""
     for b in bib:
-      if isinstance(b, arxiv2bib.ReferenceErrorInfo):
+      if isinstance(b, arxiv2bib.ReferenceErrorInfo) or isinstance(b, mr2bib.ReferenceErrorInfo):
         self.error_count += 1
-        if not self.args.quiet:
-          self.messages.append(str(b))
+
       else:
         self.output.append(b.bibtex())
+
 
   def print_output(self):
     if not self.output:
