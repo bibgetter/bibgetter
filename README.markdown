@@ -17,4 +17,10 @@ where `file.aux` is the auxiliary file created by LaTeX to communicate with `bib
 
 The resulting BibTeX code is written to `stdout`, error messages are written to `stderr`.
 
+# Installation
+
+First look at the [installation instructions for `arxiv2bib`](https://github.com/nathangrigg/arxiv2bib).
+
+Then the installation consists of `git clone`'ing this repository and [`mr2bib`](https://github.com/bibgetter/mr2bib) and running `python setup.py install` in both repositories.
+
 For more information, check [bibgetter.github.io](https://bibgetter.github.io).
