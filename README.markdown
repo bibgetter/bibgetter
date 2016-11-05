@@ -11,6 +11,10 @@ to fetch the corresponding BibTeX entries.
 
 There is only one way of using the script, namely by calling
 
-  bibgetter file.aux
+    bibgetter file.aux
 
-where `file.aux` is the auxiliary file created by LaTeX to communicate with `bibtex` or `biber`, and which will contain the information corresponding to the `\cite` commands in your LaTeX file.
+where `file.aux` is the auxiliary file created by LaTeX to communicate with `bibtex` or `biber`, and which will contain the information corresponding to the `\cite` commands in your LaTeX file. It is possible to pass multiple files.
+
+The resulting BibTeX code is written to `stdout`, error messages are written to `stderr`.
+
+For more information, check [bibgetter.github.io](https://bibgetter.github.io).
