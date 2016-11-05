@@ -4,7 +4,7 @@ import sys
 import arxiv2bib
 import mr2bib
 
-# list of known citation commands
+# list of known citation commands, add as necessary
 commands = ["citation", "abx@aux@cite"]
 
 class Cli(object):
@@ -16,10 +16,6 @@ class Cli(object):
 
     if len(self.args.filenames) == 0:
       self.args.filenames = [line.strip() for line in sys.stdin]
-
-    # avoid duplicate error messages unless verbose is set
-    if not self.args.verbose:
-      self.args.quiet = True
 
     self.output = []
     self.messages = []
@@ -50,15 +46,16 @@ class Cli(object):
       try:
         with open(filename) as f: keys = keys + self._read(f)
       except IOError as e:
-        print(e)
+        self.messages.append("Could not open %s" % filename)
 
     bib = []
 
-    # all arXiv keys
     arXiv = filter(arxiv2bib.is_valid, keys)
+    # arxiv2bib does all keys at once
     bib = bib + [b for b in arxiv2bib.arxiv2bib(arXiv)]
 
     MR = filter(mr2bib.is_valid, keys)
+    # mr2bib is key per key
     try:
       bib = bib + [b for b in mr2bib.mr2bib(MR)]
     except mr2bib.AuthenticationException:
@@ -71,6 +68,8 @@ class Cli(object):
       else:
         self.output.append(b.bibtex())
 
+    self.code = self.tally_errors(bib)
+
 
   def print_output(self):
     if not self.output:
@@ -81,18 +80,16 @@ class Cli(object):
       print(output_string)
     except UnicodeEncodeError:
       print_bytes((output_string + os.linesep).encode('utf-8'))
-      if self.args.verbose:
-        self.messages.append(
-         'Could not use system encoding; using utf-8')
 
   def tally_errors(self, bib):
     """calculate error code"""
-    #if self.error_count == len(self.args.filenames):
-    #    self.messages.append("No successful matches")
-    #    return 2
     if self.error_count > 0:
-      self.messages.append("%s of %s matched succesfully" %
-       (len(bib) - self.error_count, len(bib)))
+      self.messages.append("%s of %s keys matched succesfully" % (len(bib) - self.error_count, len(bib)))
+      self.messages.append("Not found:")
+      for b in bib:
+        if isinstance(b, arxiv2bib.ReferenceErrorInfo) or isinstance(b, mr2bib.ReferenceErrorInfo):
+          self.messages.append("  %s" % b.id)
+
       return 1
     else:
       return 0
@@ -113,17 +110,13 @@ class Cli(object):
     parser = argparse.ArgumentParser(
      description="Create a BibTeX file from the arXiv and Mathematical Reviews API",
      epilog="""\
-  Returns 0 on success, 1 on partial failure, 2 on total failure.
+  Returns 0 on success, 1 on (partial) failure.
   Valid BibTeX is written to stdout, error messages to stderr.
-  If no arguments are given, ids are read from stdin, one per line.""",
+  """,
      formatter_class=argparse.RawDescriptionHelpFormatter)
 
     parser.add_argument('filenames', metavar='filenames', nargs="*",
      help=".aux filenames")
-    parser.add_argument('-q', '--quiet', action='store_true',
-     help="Display fewer error messages")
-    parser.add_argument('-v', '--verbose', action="store_true",
-     help="Display more error messages")
 
     return parser.parse_args(args)
 
@@ -132,9 +125,9 @@ def main(args=None):
   cli = Cli(args)
   try:
     cli.run()
-  except FatalError as err:
+  except mr2bib.FatalError or arxiv2bib.FatalError as err:
     sys.stderr.write(err.args[0] + os.linesep)
-    return 2
+    return 1
 
   cli.print_output()
   cli.print_messages()
