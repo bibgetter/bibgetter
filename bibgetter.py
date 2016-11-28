@@ -4,6 +4,17 @@ import sys
 import arxiv2bib
 import mr2bib
 
+PY2 = sys.version_info[0] == 2
+if not PY2:
+    from urllib.parse import urlencode
+    from urllib.request import urlopen
+    from urllib.error import HTTPError
+    print_bytes = lambda s: sys.stdout.buffer.write(s)
+else:
+    from urllib import urlencode
+    from urllib2 import HTTPError, urlopen
+    print_bytes = lambda s: sys.stdout.write(s)
+
 # list of known citation commands, add as necessary
 commands = ["citation", "abx@aux@cite"]
 
