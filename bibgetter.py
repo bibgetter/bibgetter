@@ -61,11 +61,11 @@ class Cli(object):
 
     bib = []
 
-    arXiv = filter(arxiv2bib.is_valid, keys)
+    arXiv = set(filter(arxiv2bib.is_valid, keys))
     # arxiv2bib does all keys at once
     bib = bib + [b for b in arxiv2bib.arxiv2bib(arXiv)]
 
-    MR = filter(mr2bib.is_valid, keys)
+    MR = set(filter(mr2bib.is_valid, keys))
     # mr2bib is key per key
     try:
       bib = bib + [b for b in mr2bib.mr2bib(MR)]
