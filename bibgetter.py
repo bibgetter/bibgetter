@@ -18,6 +18,25 @@ else:
 # list of known citation commands, add as necessary
 commands = ["citation", "abx@aux@cite"]
 
+
+# replace arxiv2bib's output method
+def arxiv2bib_bibtex(self):
+  """BibTeX string of the reference"""
+
+  lines = ["@online{" + self.id]
+  # modify here according to your preferences
+  for key, value in [("author", " and ".join(self.authors)),
+                     ("title", self.title),
+                     ("eprint", self.id),
+                     ("eprinttype", "arxiv"),
+                     ("eprintclass", self.category),]:
+    if len(value):
+      lines.append("%-11s = {%s}" % (key, value))
+
+  return ("," + os.linesep).join(lines) + os.linesep + "}"
+
+arxiv2bib.Reference.bibtex = arxiv2bib_bibtex
+
 class Cli(object):
   """Command line interface"""
 
