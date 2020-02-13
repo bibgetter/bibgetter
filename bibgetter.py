@@ -35,7 +35,16 @@ def arxiv2bib_bibtex(self):
 
   return ("," + os.linesep).join(lines) + os.linesep + "}"
 
+# replae mr2bib's output method
+def mr2bib_bibtex(self):
+  to_remove = ("ISSN", "MRCLASS", "MRREVIEWER", "URL")
+  lines = self.entry.splitlines()
+  lines = [line for line in lines if not line.lstrip().startswith(to_remove)]
+
+  return "\n".join(lines)
+
 arxiv2bib.Reference.bibtex = arxiv2bib_bibtex
+mr2bib.Reference.bibtex = mr2bib_bibtex
 
 class Cli(object):
   """Command line interface"""

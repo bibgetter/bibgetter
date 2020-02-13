@@ -17,7 +17,7 @@ setup(
     author = "Pieter Belmans",
     author_email = "pieterbelmans@gmail.com",
     url = "http://bibgetter.github.io",
-    py_modules = ["bibgetter"],
+    py_modules = ["bibgetter", "requests"],
     keywords = ["mathscinet", "bibtex", "latex", "citation"],
     entry_points = {
         "console_scripts": ["bibgetter = bibgetter:main"]
