@@ -1,0 +1,26 @@
+[project]
+name = "bibgetter"
+version = "2.0.0"
+authors = [
+  { name="Pieter Belmans", email="pieterbelmans@gmail.com " },
+]
+description = "Retrieve and manage Bib(La)TeX entries"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/bibgetter/bibgetter"
+Issues = "https://github.com/bibgetter/bibgetter/issues"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.black]
+line-length = 88
+target-version = ["py313"]
