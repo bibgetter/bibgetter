@@ -6,14 +6,19 @@ import os
 import re
 
 
-def is_arxiv(ID):
+def is_arxiv_id(id):
     pattern = r"^\d{4}\.\d{4,5}(v\d+)?$"
-    return re.match(pattern, ID) is not None
+    return re.match(pattern, id) is not None
 
 
-def is_mathscinet(ID):
+def is_mathscinet_id(id):
+    """
+    Check if the given identifier is a valid MathSciNet ID.
+
+    A valid MathSciNet ID starts with 'MR' followed by 1 to 7 digits.
+    """
     pattern = r"^MR\d{1,7}$"
-    return re.match(pattern, ID) is not None
+    return re.match(pattern, id) is not None
 
 
 def arxiv2biblatex(entry):
@@ -68,8 +73,8 @@ def main():
         IDs.extend(args.operation[1:])
 
         print(IDs)
-        print(get_arxiv(filter(is_arxiv, IDs)))
         print(list(filter(is_mathscinet, IDs)))
+        print(get_arxiv(filter(is_arxiv_id, IDs)))
 
 
 if __name__ == "__main__":
