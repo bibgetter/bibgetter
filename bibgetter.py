@@ -65,13 +65,18 @@ def main():
     args = parser.parse_args()
 
     # read the central bibliography file
-    bib = bibtexparser.parse_file(
+    central = bibtexparser.parse_file(
         os.path.expanduser("~") + "/.bibgetter/bibliography.bib"
     )
-    keys = [entry.key for entry in bib.entries]
+    central_keys = [entry.key for entry in central.entries]
 
-    # the IDs of the entries to fetch: commandline arguments and from the .aux file(s)
-    IDs = []
+    local_keys = []
+    if args.local:
+        local = bibtexparser.parse_file(args.local)
+        local_keys = [entry.key for entry in local.entries]
+
+    # the id's of the entries to fetch: commandline arguments and from the .aux file(s)
+    ids = []
 
     # if args.file is present, read the file(s) and look for citations
     if args.file:
@@ -80,12 +85,14 @@ def main():
                 # TODO look for citations
                 pass
 
-    if args.operation[0] in ["fetch", "merge"]:
-        IDs.extend(args.operation[1:])
+    if args.operation[0] not in ["add", "sync", "pull"]:
+        raise (ValueError("Invalid operation"))
 
-        print(IDs)
-        print(list(filter(is_mathscinet, IDs)))
-        print(get_arxiv(filter(is_arxiv_id, IDs)))
+    # add the id's from the commandline arguments
+    ids.extend(args.operation[1:])
+
+    print(get_arxiv(filter(is_arxiv_id, ids)))
+    print(list(filter(is_mathscinet_id, ids)))
 
 
 if __name__ == "__main__":
