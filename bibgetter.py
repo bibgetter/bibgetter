@@ -7,6 +7,16 @@ import re
 
 
 def is_arxiv_id(id):
+    """
+    Check if the given string is a valid arXiv identifier.
+
+    An arXiv identifier follows the pattern: YYYY.NNNN or YYYY.NNNNN,
+    optionally followed by 'v' and a version number.
+
+    TODO implement old scheme
+    https://info.arxiv.org/help/arxiv_identifier.html
+    https://info.arxiv.org/help/arxiv_identifier_for_services.html
+    """
     pattern = r"^\d{4}\.\d{4,5}(v\d+)?$"
     return re.match(pattern, id) is not None
 
@@ -50,7 +60,8 @@ def get_arxiv(IDs):
 def main():
     parser = argparse.ArgumentParser(description="bibgetter")
     parser.add_argument("operation", help="Operation to perform", nargs="*")
-    parser.add_argument("--file", help="File to save the output", type=str)
+    parser.add_argument("--file", help=".aux file", type=str)
+    parser.add_argument("--local", help="local bibliography file", type=str)
     args = parser.parse_args()
 
     # read the central bibliography file
