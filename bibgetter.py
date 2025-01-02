@@ -46,6 +46,11 @@ def arxiv2biblatex(entry):
     )
 
 
+def get_citations(file):
+    pattern = re.compile(r"\\abx@aux@cite\{0\}\{([^}]+)\}")
+    return list(set(pattern.findall(file)))
+
+
 def get_arxiv(IDs):
     if isinstance(IDs, str):
         IDs = [IDs]
@@ -82,7 +87,7 @@ def main():
     if args.file:
         for filename in glob.glob(args.file):
             with open(filename) as f:
-                # TODO look for citations
+                print(get_citations(f.read()))
                 pass
 
     if args.operation[0] not in ["add", "sync", "pull"]:
