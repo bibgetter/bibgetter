@@ -36,6 +36,6 @@ This option is guaranteed to work offline.
 
 So most likely you want to have something like
 
-`bibgetter merge --file article.aux --target bibliography.bib`
+`bibgetter pull --file article.aux --target bibliography.bib`
 
 in your toolchain.
