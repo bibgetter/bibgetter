@@ -16,10 +16,11 @@ def is_mathscinet(ID):
 
 def arxiv2biblatex(entry):
     id = entry.entry_id.split("/")[-1]
+    authors = " and ".join([author.name for author in entry.authors])
 
     return (
         f"@online{{{id}\n"
-        f"  author      = {{{entry.authors}}},\n"
+        f"  author      = {{{authors}}},\n"
         f"  title       = {{{entry.title}}},\n"
         f"  eprinttype  = {{arxiv}},\n"
         f"  eprint      = {{{id}}},\n"
