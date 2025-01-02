@@ -1,6 +1,8 @@
 import argparse
 import arxiv
+import bibtexparser
 import glob
+import os
 import re
 
 
@@ -46,6 +48,13 @@ def main():
     parser.add_argument("--file", help="File to save the output", type=str)
     args = parser.parse_args()
 
+    # read the central bibliography file
+    bib = bibtexparser.parse_file(
+        os.path.expanduser("~") + "/.bibgetter/bibliography.bib"
+    )
+    keys = [entry.key for entry in bib.entries]
+
+    # the IDs of the entries to fetch: commandline arguments and from the .aux file(s)
     IDs = []
 
     # if args.file is present, read the file(s) and look for citations
