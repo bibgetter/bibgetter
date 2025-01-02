@@ -17,6 +17,7 @@ else:
 
 # list of known citation commands, add as necessary
 commands = ["citation", "abx@aux@cite"]
+# upgrading to TeX Live 2023 changed the command to \abx@aux@cite{0}{MR4557892} it seems?
 
 
 # replace arxiv2bib's output method
@@ -67,9 +68,10 @@ class Cli(object):
     # read the .aux file and look for citation commands
     for line in f:
       # the main assumption here is that the .aux file always contains things of the form \citation{key}, where `citation` can differ
-      command = line[1:].split("{")[0]
+      # TODO change to regex ...
+      command = line[1:].split("{0}")[0]
       if command in commands:
-        values = line.split("{")[1].split("}")[0]
+        values = line.split("{0}{")[1].split("}")[0]
 
         for key in values.split(","): keys.append(key)
 
