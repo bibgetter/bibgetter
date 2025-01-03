@@ -2,6 +2,7 @@ import argparse
 import arxiv
 import bibtexparser
 import glob
+import mr2bib
 import os
 import re
 
@@ -91,8 +92,9 @@ def get_arxiv(ids):
 
 @make_argument_list
 def get_mathscinet(ids):
-    # TODO implement this
-    return ""
+    entries = mr2bib.mr2bib_dict(ids)
+
+    return "\n".join(entry.bibtex() for entry in entries.values()) + "\n"
 
 
 # pairs of (predicate, action) to resolve the keys
