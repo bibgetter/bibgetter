@@ -107,11 +107,40 @@ def add_entries(ids, central_keys):
     # ignores local keys (warn user they specified local file)
     missing = [id for id in ids if id not in central_keys]
 
+    # write to central bibliography
     with open(CENTRAL_BIBLIOGRAPHY, "a") as f:
         for predicate, action in ACTIONS:
             keys = list(filter(predicate, missing))
             f.write(action(keys))
             print(f"Added {len(keys)} entries: {keys}")
+
+
+def sync_entries(ids, central, local_keys, filename=None):
+    # take ids, remove the ones already in local_keys, and look up the missing ones
+    # from the central bibliography file
+    missing = [id for id in ids if id not in local_keys]
+
+    central_keys = [entry.key for entry in central.entries]
+
+    output = ""
+
+    for id in missing:
+        if id not in central_keys:
+            # TODO need to give a useful error
+            print("Entry not found in central bibliography:", id)
+            continue
+
+        entry = next(filter(lambda e: e.key == id, central.entries))
+        output += entry.raw + "\n"
+
+    # write to local bibliography (if set)
+    if filename is not None:
+        with open(filename, "a") as f:
+            f.write(output)
+            # TODO print to stdout that entries were added to the local file (and how many)
+    # else, just print to stdout
+    else:
+        print(output)
 
 
 def main():
@@ -154,7 +183,12 @@ def main():
         add_entries(ids, central_keys)
 
     if args.operation[0] == "sync":
-        pass
+        target = None
+        if hasattr(args, "local"):
+            target = args.local
+
+        sync_entries(ids, central, local_keys, filename=target)
+
     if args.operation[0] == "pull":
         pass
 
