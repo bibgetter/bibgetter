@@ -179,21 +179,19 @@ def main():
     # add the id's from the commandline arguments
     ids.extend(args.operation[1:])
 
+    target = None
+    if hasattr(args, "local"):
+        target = args.local
+
     if args.operation[0] == "add":
         add_entries(ids, central_keys)
 
     if args.operation[0] == "sync":
-        target = None
-        if hasattr(args, "local"):
-            target = args.local
-
         sync_entries(ids, central, local_keys, filename=target)
 
     if args.operation[0] == "pull":
-        pass
-
-    # print(get_arxiv(filter(is_arxiv_id, ids)))
-    # print(list(filter(is_mathscinet_id, ids)))
+        add_entries(ids, central_keys)
+        sync_entries(ids, central, local_keys, filename=target)
 
 
 if __name__ == "__main__":
