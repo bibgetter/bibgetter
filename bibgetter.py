@@ -43,7 +43,7 @@ def arxiv2biblatex(entry):
     authors = " and ".join([author.name for author in entry.authors])
 
     return (
-        f"@online{{{id}\n"
+        f"@online{{{id},\n"
         f"  author      = {{{authors}}},\n"
         f"  title       = {{{entry.title}}},\n"
         f"  eprinttype  = {{arxiv}},\n"
