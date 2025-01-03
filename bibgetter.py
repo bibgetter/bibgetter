@@ -47,6 +47,7 @@ def arxiv2biblatex(key, entry):
         f"@online{{{key},\n"
         f"  author      = {{{authors}}},\n"
         f"  title       = {{{entry.title}}},\n"
+        f"  year        = {{{entry.updated.year}}},\n"
         f"  eprinttype  = {{arxiv}},\n"
         f"  eprint      = {{{id}}},\n"
         f"  eprintclass = {{{entry.primary_category}}},\n"
@@ -99,6 +100,9 @@ def clean_mr2bib_bibtex(entry):
 @make_argument_list
 def get_mathscinet(ids):
     entries = mr2bib.mr2bib_dict(ids)
+
+    # TODO BibLaTeX supports the ids field, which makes it possible to give synonyms
+    # we should add the "badkey" as alternative id!
 
     return (
         "\n".join(clean_mr2bib_bibtex(entry.bibtex()) for entry in entries.values())
