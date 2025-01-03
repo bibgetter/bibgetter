@@ -49,7 +49,7 @@ def arxiv2biblatex(entry):
         f"  eprinttype  = {{arxiv}},\n"
         f"  eprint      = {{{id}}},\n"
         f"  eprintclass = {{{entry.primary_category}}},\n"
-        f"}}"
+        f"}}\n"
     )
 
 
@@ -80,7 +80,7 @@ def get_arxiv(ids):
     entries = arxiv.Client().results(arxiv.Search(id_list=list(ids)))
     entries = map(arxiv2biblatex, entries)
 
-    return "\n".join(entries)
+    return "\n\n".join(entries) + "\n"
 
 
 @make_argument_list
@@ -134,10 +134,13 @@ def main():
         missing = [id for id in ids if id not in central_keys]
         actions = [(is_arxiv_id, get_arxiv), (is_mathscinet_id, get_mathscinet)]
 
-        for predicate, action in actions:
-            print(predicate)
-            with open(CENTRAL_BIBLIOGRAPHY, "a") as f:
-                f.write(action(filter(predicate, missing)))
+        # TODO arxiv has versions: how to deal with those?
+
+        with open(CENTRAL_BIBLIOGRAPHY, "a") as f:
+            for predicate, action in actions:
+                keys = list(filter(predicate, missing))
+                f.write(action(keys))
+                print(f"Added {len(keys)} entries: {keys}")
 
     if args.operation[0] == "sync":
         pass
