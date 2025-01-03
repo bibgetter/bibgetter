@@ -102,6 +102,18 @@ ACTIONS = [(is_arxiv_id, get_arxiv), (is_mathscinet_id, get_mathscinet)]
 CENTRAL_BIBLIOGRAPHY = os.path.expanduser("~/.bibgetter/bibliography.bib")
 
 
+def add_entries(ids, central_keys):
+    # take ids, remove the ones already in central_keys, and look up the missing ones
+    # ignores local keys (warn user they specified local file)
+    missing = [id for id in ids if id not in central_keys]
+
+    with open(CENTRAL_BIBLIOGRAPHY, "a") as f:
+        for predicate, action in ACTIONS:
+            keys = list(filter(predicate, missing))
+            f.write(action(keys))
+            print(f"Added {len(keys)} entries: {keys}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="bibgetter")
     parser.add_argument("operation", help="Operation to perform", nargs="*")
@@ -139,15 +151,7 @@ def main():
     ids.extend(args.operation[1:])
 
     if args.operation[0] == "add":
-        # take ids, remove the ones already in central_keys, and look up the missing ones
-        # ignores local keys (warn user they specified local file)
-        missing = [id for id in ids if id not in central_keys]
-
-        with open(CENTRAL_BIBLIOGRAPHY, "a") as f:
-            for predicate, action in ACTIONS:
-                keys = list(filter(predicate, missing))
-                f.write(action(keys))
-                print(f"Added {len(keys)} entries: {keys}")
+        add_entries(ids, central_keys)
 
     if args.operation[0] == "sync":
         pass
