@@ -80,14 +80,29 @@ def get_arxiv(ids):
     entries = arxiv.Client().results(arxiv.Search(id_list=list(ids)))
     entries = map(arxiv2biblatex, ids, entries)
 
-    return "\n\n".join(entries) + "\n"
+    return "\n".join(entries)
+
+
+def clean_mr2bib_bibtex(entry):
+    to_remove = ()
+    if "DOI = {" in entry:
+        to_remove = to_remove + ("URL",)
+    # other fields (like ISSN, MRREVIEWER, or MRCLASS) I don't like are removed by biber
+
+    lines = entry.splitlines()
+    lines = [line for line in lines if not line.lstrip().startswith(to_remove)]
+
+    return "\n".join(lines)
 
 
 @make_argument_list
 def get_mathscinet(ids):
     entries = mr2bib.mr2bib_dict(ids)
 
-    return "\n".join(entry.bibtex() for entry in entries.values()) + "\n"
+    return (
+        "\n".join(clean_mr2bib_bibtex(entry.bibtex()) for entry in entries.values())
+        + "\n"
+    )
 
 
 # pairs of (predicate, action) to resolve the keys
