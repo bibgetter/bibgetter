@@ -70,7 +70,7 @@ def make_argument_list(func):
     def enclose(argument):
         if isinstance(argument, str):
             return func([argument])
-        func(argument)
+        return func(argument)
 
     return enclose
 
@@ -89,6 +89,9 @@ def get_mathscinet(ids):
     return ""
 
 
+CENTRAL_BIBLIOGRAPHY = os.path.expanduser("~/.bibgetter/bibliography.bib")
+
+
 def main():
     parser = argparse.ArgumentParser(description="bibgetter")
     parser.add_argument("operation", help="Operation to perform", nargs="*")
@@ -97,9 +100,8 @@ def main():
     args = parser.parse_args()
 
     # read the central bibliography file
-    central = bibtexparser.parse_file(
-        os.path.expanduser("~") + "/.bibgetter/bibliography.bib"
-    )
+    central = bibtexparser.parse_file(CENTRAL_BIBLIOGRAPHY)
+    # TODO just have a local keys(entries) function?
     central_keys = [entry.key for entry in central.entries]
 
     # read the local bibliography file (if specified)
@@ -110,6 +112,8 @@ def main():
 
     # the id's of the entries to fetch: commandline arguments and from the .aux file(s)
     ids = []
+
+    # TODO make sure to consistenty use keys and ids?
 
     # if args.file is present, read the file(s) and look for citations
     if args.file:
@@ -128,13 +132,13 @@ def main():
         # take ids, remove the ones already in central_keys, and look up the missing ones
         # ignores local keys (warn user they specified local file)
         missing = [id for id in ids if id not in central_keys]
-        print("missing ids are")
-        print(missing)
         actions = [(is_arxiv_id, get_arxiv), (is_mathscinet_id, get_mathscinet)]
 
         for predicate, action in actions:
             print(predicate)
-            print(list(map(action, filter(predicate, missing))))
+            with open(CENTRAL_BIBLIOGRAPHY, "a") as f:
+                f.write(action(filter(predicate, missing)))
+
     if args.operation[0] == "sync":
         pass
     if args.operation[0] == "pull":
