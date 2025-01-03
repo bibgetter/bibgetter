@@ -95,6 +95,10 @@ def get_mathscinet(ids):
     return ""
 
 
+# pairs of (predicate, action) to resolve the keys
+ACTIONS = [(is_arxiv_id, get_arxiv), (is_mathscinet_id, get_mathscinet)]
+
+# location of the central bibliography file
 CENTRAL_BIBLIOGRAPHY = os.path.expanduser("~/.bibgetter/bibliography.bib")
 
 
@@ -138,12 +142,9 @@ def main():
         # take ids, remove the ones already in central_keys, and look up the missing ones
         # ignores local keys (warn user they specified local file)
         missing = [id for id in ids if id not in central_keys]
-        actions = [(is_arxiv_id, get_arxiv), (is_mathscinet_id, get_mathscinet)]
-
-        # TODO arxiv has versions: how to deal with those?
 
         with open(CENTRAL_BIBLIOGRAPHY, "a") as f:
-            for predicate, action in actions:
+            for predicate, action in ACTIONS:
                 keys = list(filter(predicate, missing))
                 f.write(action(keys))
                 print(f"Added {len(keys)} entries: {keys}")
