@@ -38,12 +38,18 @@ def sanitize_mathscinet_id(id):
     return re.sub(r"^MR0+", "MR", id)
 
 
-def arxiv2biblatex(entry):
+def arxiv2biblatex(key, entry):
+    """
+    Convert an arXiv entry to a BibLaTeX entry.
+
+    One has to specify the key to be used: often the user will want to cite the current
+    version of the preprint without actually specifying the version in the BibTeX key.
+    """
     id = entry.entry_id.split("/")[-1]
     authors = " and ".join([author.name for author in entry.authors])
 
     return (
-        f"@online{{{id},\n"
+        f"@online{{{key},\n"
         f"  author      = {{{authors}}},\n"
         f"  title       = {{{entry.title}}},\n"
         f"  eprinttype  = {{arxiv}},\n"
@@ -78,7 +84,7 @@ def make_argument_list(func):
 @make_argument_list
 def get_arxiv(ids):
     entries = arxiv.Client().results(arxiv.Search(id_list=list(ids)))
-    entries = map(arxiv2biblatex, entries)
+    entries = map(arxiv2biblatex, ids, entries)
 
     return "\n\n".join(entries) + "\n"
 
