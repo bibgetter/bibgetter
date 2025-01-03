@@ -54,19 +54,39 @@ def arxiv2biblatex(entry):
 
 
 def get_citations(file):
+    # TODO implement other formats
     pattern = re.compile(r"\\abx@aux@cite\{0\}\{([^}]+)\}")
     return list(set(pattern.findall(file)))
 
 
-def get_arxiv(IDs):
-    if isinstance(IDs, str):
-        IDs = [IDs]
+def make_argument_list(func):
+    """
+    Decorator to convert a single argument to a list if it is a string.
 
-    entries = arxiv.Client().results(arxiv.Search(id_list=list(IDs)))
+    This is useful for functions that expect a list of arguments, but the user only provides
+    a single argument.
+    """
+
+    def enclose(argument):
+        if isinstance(argument, str):
+            return func([argument])
+        func(argument)
+
+    return enclose
+
+
+@make_argument_list
+def get_arxiv(ids):
+    entries = arxiv.Client().results(arxiv.Search(id_list=list(ids)))
     entries = map(arxiv2biblatex, entries)
 
-    for bib in entries:
-        print(bib)
+    return "\n".join(entries)
+
+
+@make_argument_list
+def get_mathscinet(ids):
+    # TODO implement this
+    return ""
 
 
 def main():
