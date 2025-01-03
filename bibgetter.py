@@ -102,6 +102,7 @@ def main():
     )
     central_keys = [entry.key for entry in central.entries]
 
+    # read the local bibliography file (if specified)
     local_keys = []
     if args.local:
         local = bibtexparser.parse_file(args.local)
@@ -114,7 +115,7 @@ def main():
     if args.file:
         for filename in glob.glob(args.file):
             with open(filename) as f:
-                print(get_citations(f.read()))
+                ids.extend(get_citations(f.read()))
                 pass
 
     if args.operation[0] not in ["add", "sync", "pull"]:
@@ -123,8 +124,24 @@ def main():
     # add the id's from the commandline arguments
     ids.extend(args.operation[1:])
 
-    print(get_arxiv(filter(is_arxiv_id, ids)))
-    print(list(filter(is_mathscinet_id, ids)))
+    if args.operation[0] == "add":
+        # take ids, remove the ones already in central_keys, and look up the missing ones
+        # ignores local keys (warn user they specified local file)
+        missing = [id for id in ids if id not in central_keys]
+        print("missing ids are")
+        print(missing)
+        actions = [(is_arxiv_id, get_arxiv), (is_mathscinet_id, get_mathscinet)]
+
+        for predicate, action in actions:
+            print(predicate)
+            print(list(map(action, filter(predicate, missing))))
+    if args.operation[0] == "sync":
+        pass
+    if args.operation[0] == "pull":
+        pass
+
+    # print(get_arxiv(filter(is_arxiv_id, ids)))
+    # print(list(filter(is_mathscinet_id, ids)))
 
 
 if __name__ == "__main__":
