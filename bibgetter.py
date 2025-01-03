@@ -5,6 +5,7 @@ import glob
 import mr2bib
 import os
 import re
+import subprocess
 
 
 def is_arxiv_id(id):
@@ -153,6 +154,24 @@ def sync_entries(ids, central, local_keys, filename=None):
         print(output)
 
 
+def format(filename):
+    # biber --configfile=sort.conf ~/.bibgetter/bibliography.bib
+    subprocess.call(
+        [
+            "biber",
+            "--tool",
+            "--output-safechars",
+            "--fixinits",
+            "--isbn-normalise",
+            "--output_encoding=ascii",
+            "--configfile=sort.conf",
+            "--validate-datamodel",
+            f"--output_file={filename}",
+            filename,
+        ]
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description="bibgetter")
     parser.add_argument("operation", help="Operation to perform", nargs="*")
@@ -195,6 +214,7 @@ def main():
 
     if args.operation[0] == "add":
         add_entries(ids, central_keys)
+        format(CENTRAL_BIBLIOGRAPHY)
 
     if args.operation[0] == "sync":
         sync_entries(ids, central, local_keys, filename=target)
