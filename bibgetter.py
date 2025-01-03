@@ -32,13 +32,6 @@ def is_mathscinet_id(id):
     return re.match(pattern, id) is not None
 
 
-def sanitize_mathscinet_id(id):
-    """
-    Sanitize a MathSciNet ID by removing leading zeroes
-    """
-    return re.sub(r"^MR0+", "MR", id)
-
-
 def arxiv2biblatex(key, entry):
     """
     Convert an arXiv entry to a BibLaTeX entry.
