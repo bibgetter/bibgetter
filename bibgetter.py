@@ -6,6 +6,8 @@ import json
 import glob
 import os
 import re
+import rich
+import rich.columns
 import requests
 import subprocess
 
@@ -182,22 +184,70 @@ def keys(bibliography) -> list:
     return defaults + alternatives
 
 
-def add_entries(ids, central_keys):
+def add_entries(ids, central_keys) -> bool:
+    """
+    Add entries to the central bibliography.
+
+    Returns True if the central bibliography was modified.
+    """
     # take ids, remove the ones already in central_keys, and look up the missing ones
     # ignores local keys (warn user they specified local file)
     missing = [id for id in ids if id not in central_keys]
 
+    rich.print(
+        f"{len(ids) - len(missing)} [default not bold]key(s)"
+        f" already in central bibliography"
+    )
+
+    if not missing:
+        return False
+
+    rich.print(
+        f"Looking up {len(missing)} {"entry" if len(missing) == 1 else "entries"}"
+    )
+
+    touched = False
+
     for type in ACTIONS:
         (predicate, action) = ACTIONS[type]
+
         matched = list(filter(predicate, missing))
-        missing = [id for id in missing if id not in matched]
+        missing = sorted([id for id in missing if id not in matched])
+
+        if not matched:
+            continue
 
         with open(CENTRAL_BIBLIOGRAPHY, "a") as f:
             f.write(action(matched))
+            touched = True
 
-        print(f"Added {len(matched)} entries: {matched}")
+        rich.print(
+            f"Added {len(matched)}"
+            f" {"entry" if len(matched) == 1 else "entries"} from {type}"
+        )
+        rich.print(
+            rich.padding.Padding(
+                rich.columns.Columns(
+                    [f"[green not bold]{key}" for key in matched],
+                    equal=True,
+                    expand=True,
+                ),
+                (0, 0, 0, 4),
+            )
+        )
 
-    print("Entries not matched:", missing)
+    if missing:
+        rich.print(f"Could not recognize {len(missing)} keys:")
+        rich.print(
+            rich.padding.Padding(
+                rich.columns.Columns(
+                    [f"[red not bold]{key}" for key in missing], equal=True, expand=True
+                ),
+                (0, 0, 0, 4),
+            )
+        )
+
+    return touched
 
 
 def sync_entries(ids, central, local_keys, filename=None):
@@ -216,8 +266,9 @@ def sync_entries(ids, central, local_keys, filename=None):
             print("Entry not found in central bibliography:", id)
             continue
 
+        # TODO also search on ids
         entry = next(filter(lambda e: e.key == id, central.entries))
-        output += entry.raw + "\n"
+        output += entry.raw + "\n\n"
 
     # write to local bibliography (if set)
     if filename is not None:
@@ -248,7 +299,8 @@ def format(filename):
             "--validate-datamodel",
             f"--output_file={filename}",
             filename,
-        ]
+        ],
+        stdout=subprocess.DEVNULL,
     )
 
 
@@ -288,14 +340,18 @@ def main():
 
     # add the id's from the commandline arguments
     ids.extend(args.operation[1:])
+    ids = list(set(ids))
+
+    rich.print(f"Considering {len(ids)} [default not bold]key(s)")
 
     target = None
     if hasattr(args, "local"):
         target = args.local
 
     if args.operation[0] == "add":
-        add_entries(ids, central_keys)
-        format(CENTRAL_BIBLIOGRAPHY)
+        touched = add_entries(ids, central_keys)
+        if touched:
+            format(CENTRAL_BIBLIOGRAPHY)
 
     if args.operation[0] == "sync":
         sync_entries(ids, central, local_keys, filename=target)
