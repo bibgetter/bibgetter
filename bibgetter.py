@@ -164,6 +164,18 @@ ACTIONS = {
 CENTRAL_BIBLIOGRAPHY = os.path.expanduser("~/.bibgetter/bibliography.bib")
 
 
+def keys(bibliography) -> list:
+    defaults = [entry.key for entry in bibliography.entries]
+    alternatives = [
+        id
+        for entry in bibliography.entries
+        if "ids" in entry
+        for id in entry["ids"].split(",")
+    ]
+
+    return defaults + alternatives
+
+
 def add_entries(ids, central_keys):
     # take ids, remove the ones already in central_keys, and look up the missing ones
     # ignores local keys (warn user they specified local file)
@@ -188,6 +200,7 @@ def sync_entries(ids, central, local_keys, filename=None):
     missing = [id for id in ids if id not in local_keys]
 
     central_keys = [entry.key for entry in central.entries]
+    # TODO use keys(central)
 
     output = ""
 
@@ -242,15 +255,14 @@ def main():
 
     # read the central bibliography file
     central = bibtexparser.parse_file(CENTRAL_BIBLIOGRAPHY)
-    # TODO just have a local keys(entries) function?
-    central_keys = [entry.key for entry in central.entries]
-
-    # TODO also look at IDS field!
+    # central_keys = [entry.key for entry in central.entries]
+    central_keys = keys(central)
 
     # read the local bibliography file (if specified)
     local_keys = []
     if args.local:
         local = bibtexparser.parse_file(args.local)
+        # TODO use keys
         local_keys = [entry.key for entry in local.entries]
 
     # the id's of the entries to fetch: commandline arguments and from the .aux file(s)
