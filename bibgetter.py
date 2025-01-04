@@ -10,7 +10,7 @@ import requests
 import subprocess
 
 
-def is_arxiv_id(id):
+def is_arxiv_id(id: str) -> bool:
     """
     Check if the given string is a valid arXiv identifier.
 
@@ -28,7 +28,7 @@ def is_arxiv_id(id):
     return re.match(old, id) or re.match(new, id)
 
 
-def is_mathscinet_id(id):
+def is_mathscinet_id(id: str) -> bool:
     """
     Check if the given identifier is a valid MathSciNet ID.
 
@@ -60,7 +60,7 @@ def arxiv2biblatex(key, entry):
     )
 
 
-def get_citations(file):
+def get_citations(file: str) -> list:
     # TODO implement other formats
     patterns = [
         re.compile(r"\\abx@aux@cite\{0\}\{([^}]+)\}"),
