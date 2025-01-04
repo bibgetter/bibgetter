@@ -148,24 +148,21 @@ def get_mathscinet(ids):
         headers={"User-Agent": fake_useragent.UserAgent().chrome},
     )
 
-    # TODO this seems no longer necessary?
-    if r.status_code == 401:
-        raise Exception("Not authenticated to MathSciNet")
-
-    # anything but 200 means something else went wrong
+    # anything but 200 means something went wrong
     if not r.status_code == 200:
-        print(r.url)
+        print(f"URL was {r.url}")
         raise Exception("Received HTTP status code " + str(r.status_code))
 
     response = json.loads(r.text)
 
-    return "\n".join(clean_mr2bib_bibtex(entry["bib"]) for entry in response) + "\n"
+    return "\n".join(clean_mathscinet_entry(entry["bib"]) for entry in response) + "\n"
 
 
 # pairs of (predicate, action) to resolve the keys
 ACTIONS = {
     "arXiv": (is_arxiv_id, get_arxiv),
     "MathSciNet": (is_mathscinet_id, get_mathscinet),
+    # TODO implement zbMath
 }
 
 # location of the central bibliography file
