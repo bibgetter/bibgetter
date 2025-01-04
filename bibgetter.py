@@ -42,14 +42,13 @@ def is_mathscinet_id(id: str) -> bool:
 
 def arxiv2biblatex(key, entry):
     """
-    Convert an arXiv entry to a BibLaTeX entry.
+    Convert an arXiv preprint to a BibLaTeX entry.
 
     One has to specify the key to be used: often the user will want to cite the current
     version of the preprint without actually specifying the version in the BibTeX key.
     """
     # the "true" id, including the version number
     id = entry.entry_id.split("/")[-1]
-
     authors = " and ".join([author.name for author in entry.authors])
 
     return (
@@ -66,13 +65,15 @@ def arxiv2biblatex(key, entry):
 
 
 def get_citations(file: str) -> list:
-    """
+    r"""
     Extract citation keys from the given file.
 
     This function searches for citation keys in the provided file content using
     predefined regular expression patterns.
 
-    TODO document the different formats
+    * `\citation{key}`: basic BibTeX
+    * `\abx@aux@cite{key}`: old biblatex format
+    * `\abx@aux@cite{0}{key}`: new biblatex format
 
     Args:
         file (str): The content of the file to search for citation keys.
@@ -80,8 +81,8 @@ def get_citations(file: str) -> list:
     Returns:
         list: A list of unique citation keys found in the file.
     """
-    # TODO implement other formats
     patterns = [
+        re.compile(r"\\citation\{([^}]+)\}"),
         re.compile(r"\\abx@aux@cite\{0\}\{([^}]+)\}"),
         re.compile(r"\\abx@aux@cite\{([^}]+)\}"),
     ]
