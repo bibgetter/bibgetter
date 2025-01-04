@@ -60,8 +60,12 @@ def arxiv2biblatex(key, entry):
 
 def get_citations(file):
     # TODO implement other formats
-    pattern = re.compile(r"\\abx@aux@cite\{0\}\{([^}]+)\}")
-    return list(set(pattern.findall(file)))
+    patterns = [
+        re.compile(r"\\abx@aux@cite\{0\}\{([^}]+)\}"),
+        re.compile(r"\\abx@aux@cite\{([^}]+)\}"),
+    ]
+    keys = [key for pattern in patterns for key in pattern.findall(file)]
+    return list(set(keys))
 
 
 def make_argument_list(func):
