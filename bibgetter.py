@@ -111,7 +111,10 @@ def get_mathscinet(ids):
 
 
 # pairs of (predicate, action) to resolve the keys
-ACTIONS = [(is_arxiv_id, get_arxiv), (is_mathscinet_id, get_mathscinet)]
+ACTIONS = {
+    "arXiv": (is_arxiv_id, get_arxiv),
+    "MathSciNet": (is_mathscinet_id, get_mathscinet),
+}
 
 # location of the central bibliography file
 CENTRAL_BIBLIOGRAPHY = os.path.expanduser("~/.bibgetter/bibliography.bib")
@@ -122,12 +125,17 @@ def add_entries(ids, central_keys):
     # ignores local keys (warn user they specified local file)
     missing = [id for id in ids if id not in central_keys]
 
-    # write to central bibliography
-    with open(CENTRAL_BIBLIOGRAPHY, "a") as f:
-        for predicate, action in ACTIONS:
-            keys = list(filter(predicate, missing))
-            f.write(action(keys))
-            print(f"Added {len(keys)} entries: {keys}")
+    for type in ACTIONS:
+        (predicate, action) = ACTIONS[type]
+        matched = list(filter(predicate, missing))
+        missing = [id for id in missing if id not in matched]
+
+        with open(CENTRAL_BIBLIOGRAPHY, "a") as f:
+            f.write(action(matched))
+
+        print(f"Added {len(matched)} entries: {matched}")
+
+    print("Entries not matched:", missing)
 
 
 def sync_entries(ids, central, local_keys, filename=None):
@@ -159,7 +167,12 @@ def sync_entries(ids, central, local_keys, filename=None):
 
 
 def format(filename):
-    # biber --configfile=sort.conf ~/.bibgetter/bibliography.bib
+    """
+    Format the bibliography file using biber.
+
+    This is like running black on a Python file: an opinionated formattr.
+    It will sort the entries, normalize ISBNs, and so on.
+    """
     subprocess.call(
         [
             "biber",
