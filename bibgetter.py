@@ -133,6 +133,10 @@ def clean_mr2bib_bibtex(entry):
 
 @make_argument_list
 def get_mathscinet(ids):
+    # TODO make this cleaner, if list of ids is empty, we don't do anything
+    if not ids:
+        return ""
+
     # drop the MR from the ids for the API
     ids = [id.lstrip("MR") for id in ids]
 
@@ -142,11 +146,13 @@ def get_mathscinet(ids):
         headers={"User-Agent": fake_useragent.UserAgent().chrome},
     )
 
+    # TODO this seems no longer necessary?
     if r.status_code == 401:
         raise Exception("Not authenticated to MathSciNet")
 
     # anything but 200 means something else went wrong
     if not r.status_code == 200:
+        print(r.url)
         raise Exception("Received HTTP status code " + str(r.status_code))
 
     response = json.loads(r.text)
