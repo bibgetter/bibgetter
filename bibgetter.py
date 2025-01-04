@@ -115,11 +115,11 @@ def get_arxiv(ids):
     return "\n".join(entries)
 
 
-def clean_mr2bib_bibtex(entry):
-    to_remove = ()
+def clean_mathscinet_entry(entry):
+    # other fields (like MRREVIEWER, or MRCLASS) will be removed by biber
+    to_remove = ("ISSN",)
     if "DOI = {" in entry:
         to_remove = to_remove + ("URL",)
-    # other fields (like ISSN, MRREVIEWER, or MRCLASS) I don't like are removed by biber
 
     lines = entry.strip().splitlines()
     lines = [line for line in lines if not line.lstrip().startswith(to_remove)]
