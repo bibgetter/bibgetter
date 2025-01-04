@@ -94,8 +94,8 @@ def make_argument_list(func):
     """
     Decorator to convert a single argument to a list if it is a string.
 
-    This is useful for functions that expect a list of arguments, but the user only provides
-    a single argument.
+    This is useful for functions that expect a list of arguments, but the user only
+    provides a single argument.
     """
 
     def enclose(argument):
@@ -124,7 +124,7 @@ def clean_mathscinet_entry(entry):
     lines = entry.strip().splitlines()
     lines = [line for line in lines if not line.lstrip().startswith(to_remove)]
 
-    # if numerical part of key is not 7 characters long we add long version as alternative
+    # if numerical part of key less than 7 characters, add long version as alternative
     key = lines[0].split("MR")[1][:-1]
     if len(key) < 7:
         # not the cleanest way
@@ -154,15 +154,16 @@ def get_mathscinet(ids):
         raise Exception("Received HTTP status code " + str(r.status_code))
 
     response = json.loads(r.text)
+    entries = [clean_mathscinet_entry(entry["bib"]) for entry in response]
 
-    return "\n".join(clean_mathscinet_entry(entry["bib"]) for entry in response) + "\n"
+    return "\n".join(entries) + "\n"
 
 
 # pairs of (predicate, action) to resolve the keys
 ACTIONS = {
     "arXiv": (is_arxiv_id, get_arxiv),
     "MathSciNet": (is_mathscinet_id, get_mathscinet),
-    # TODO implement zbMath
+    # TODO implement zbMath and DOI
 }
 
 # location of the central bibliography file
