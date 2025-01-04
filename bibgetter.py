@@ -106,11 +106,11 @@ def clean_mr2bib_bibtex(entry):
     lines = entry.strip().splitlines()
     lines = [line for line in lines if not line.lstrip().startswith(to_remove)]
 
-    # if the key is of the form MR0... add an IDS field (maybe better to use regex?)
+    # if numerical part of key is not 7 characters long we add long version as alternative
     key = lines[0].split("MR")[1][:-1]
-    if key.startswith("0"):
+    if len(key) < 7:
         # not the cleanest way
-        lines = [lines[0]] + [f"  IDS = {{MR{key.lstrip("0")}}},"] + lines[1:]
+        lines = [lines[0]] + [f"  IDS = {{MR{key.rjust(7, "0")}}},"] + lines[1:]
 
     return "\n".join(lines)
 
@@ -228,6 +228,8 @@ def main():
     central = bibtexparser.parse_file(CENTRAL_BIBLIOGRAPHY)
     # TODO just have a local keys(entries) function?
     central_keys = [entry.key for entry in central.entries]
+
+    # TODO also look at IDS field!
 
     # read the local bibliography file (if specified)
     local_keys = []
