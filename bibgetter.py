@@ -101,8 +101,14 @@ def clean_mr2bib_bibtex(entry):
         to_remove = to_remove + ("URL",)
     # other fields (like ISSN, MRREVIEWER, or MRCLASS) I don't like are removed by biber
 
-    lines = entry.splitlines()
+    lines = entry.strip().splitlines()
     lines = [line for line in lines if not line.lstrip().startswith(to_remove)]
+
+    # if the key is of the form MR0... add an IDS field (maybe better to use regex?)
+    key = lines[0].split("MR")[1][:-1]
+    if key.startswith("0"):
+        # not the cleanest way
+        lines = [lines[0]] + [f"  IDS = {{MR{key.lstrip("0")}}},"] + lines[1:]
 
     return "\n".join(lines)
 
@@ -110,9 +116,6 @@ def clean_mr2bib_bibtex(entry):
 @make_argument_list
 def get_mathscinet(ids):
     entries = mr2bib.mr2bib_dict(ids)
-
-    # TODO BibLaTeX supports the ids field, which makes it possible to give synonyms
-    # we should add the "badkey" as alternative id!
 
     return (
         "\n".join(clean_mr2bib_bibtex(entry.bibtex()) for entry in entries.values())
