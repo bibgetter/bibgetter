@@ -135,12 +135,12 @@ def clean_mathscinet_entry(entry):
 
 @make_argument_list
 def get_mathscinet(ids):
-    # TODO make this cleaner, if list of ids is empty, we don't do anything
+    # if list of ids is empty, we don't do anything
     if not ids:
         return ""
 
     # drop the MR from the ids for the API
-    ids = [id.lstrip("MR") for id in ids]
+    ids = [id.lstrip("mr:").lstrip("MR") for id in ids]
 
     r = requests.get(
         "https://mathscinet.ams.org/mathscinet/api/publications/format",
