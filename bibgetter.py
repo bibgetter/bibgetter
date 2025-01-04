@@ -25,7 +25,7 @@ def is_arxiv_id(id: str) -> bool:
     old = r"^arXiv:.*$"
     new = r"^\d{4}\.\d{4,5}(v\d+)?$"
 
-    return re.match(old, id) or re.match(new, id)
+    return re.fullmatch(old, id) or re.fullmatch(new, id)
 
 
 def is_mathscinet_id(id: str) -> bool:
@@ -37,7 +37,7 @@ def is_mathscinet_id(id: str) -> bool:
     """
     pattern = r"^(MR|mr:MR)\d{1,7}$"
 
-    return re.match(pattern, id) is not None
+    return re.fullmatch(pattern, id) is not None
 
 
 def arxiv2biblatex(key, entry):
