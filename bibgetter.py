@@ -14,7 +14,7 @@ def is_arxiv_id(id: str) -> bool:
     """
     Check if the given string is a valid arXiv identifier.
 
-    An arXiv identifier follows the pattern: YYYY.NNNN or YYYY.NNNNN,
+    An arXiv identifier follows the pattern: `YYYY.NNNN` or `YYYY.NNNNN`,
     optionally followed by 'v' and a version number.
 
     To match old identifiers, whose patterns is an absolute mess, prefix with `arXiv:`
@@ -34,6 +34,7 @@ def is_mathscinet_id(id: str) -> bool:
 
     A valid MathSciNet ID starts with 'MR' followed by 1 to 7 digits.
     """
+    # TODO also match "mr:MR..."
     pattern = r"^MR\d{1,7}$"
     return re.match(pattern, id) is not None
 
@@ -48,6 +49,8 @@ def arxiv2biblatex(key, entry):
     id = entry.entry_id.split("/")[-1]
     authors = " and ".join([author.name for author in entry.authors])
 
+    # TODO add IDS field
+
     return (
         f"@online{{{key},\n"
         f"  author      = {{{authors}}},\n"
@@ -61,6 +64,20 @@ def arxiv2biblatex(key, entry):
 
 
 def get_citations(file: str) -> list:
+    """
+    Extract citation keys from the given file.
+
+    This function searches for citation keys in the provided file content using
+    predefined regular expression patterns.
+
+    TODO document the different formats
+
+    Args:
+        file (str): The content of the file to search for citation keys.
+
+    Returns:
+        list: A list of unique citation keys found in the file.
+    """
     # TODO implement other formats
     patterns = [
         re.compile(r"\\abx@aux@cite\{0\}\{([^}]+)\}"),
