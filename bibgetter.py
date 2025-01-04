@@ -83,8 +83,8 @@ def get_citations(file: str) -> list:
         re.compile(r"\\abx@aux@cite\{0\}\{([^}]+)\}"),
         re.compile(r"\\abx@aux@cite\{([^}]+)\}"),
     ]
-    keys = [key for pattern in patterns for key in pattern.findall(file)]
-    return list(set(keys))
+    keys = {key for pattern in patterns for key in pattern.findall(file)}
+    return list(keys)
 
 
 def make_argument_list(func):
@@ -96,9 +96,7 @@ def make_argument_list(func):
     """
 
     def enclose(argument):
-        if isinstance(argument, str):
-            return func([argument])
-        return func(argument)
+        return func([argument]) if isinstance(argument, str) else func(argument)
 
     return enclose
 
@@ -109,7 +107,7 @@ def get_arxiv(ids):
     ids = [id.split(":")[-1] for id in ids]
 
     entries = arxiv.Client().results(arxiv.Search(id_list=list(ids)))
-    entries = map(arxiv2biblatex, ids, entries)
+    entries = list(map(arxiv2biblatex, ids, entries))
 
     return "\n".join(entries)
 
