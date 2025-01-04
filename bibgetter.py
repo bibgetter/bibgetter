@@ -1,10 +1,12 @@
 import argparse
 import arxiv
 import bibtexparser
+import fake_useragent
+import json
 import glob
-import mr2bib
 import os
 import re
+import requests
 import subprocess
 
 
@@ -115,12 +117,25 @@ def clean_mr2bib_bibtex(entry):
 
 @make_argument_list
 def get_mathscinet(ids):
-    entries = mr2bib.mr2bib_dict(ids)
+    # drop the MR from the ids for the API
+    ids = [id.lstrip("MR") for id in ids]
 
-    return (
-        "\n".join(clean_mr2bib_bibtex(entry.bibtex()) for entry in entries.values())
-        + "\n"
+    r = requests.get(
+        "https://mathscinet.ams.org/mathscinet/api/publications/format",
+        params={"formats": "bib", "ids": ",".join(ids)},
+        headers={"User-Agent": fake_useragent.UserAgent().chrome},
     )
+
+    if r.status_code == 401:
+        raise Exception("Not authenticated to MathSciNet")
+
+    # anything but 200 means something else went wrong
+    if not r.status_code == 200:
+        raise Exception("Received HTTP status code " + str(r.status_code))
+
+    response = json.loads(r.text)
+
+    return "\n".join(clean_mr2bib_bibtex(entry["bib"]) for entry in response) + "\n"
 
 
 # pairs of (predicate, action) to resolve the keys
