@@ -15,12 +15,15 @@ def is_arxiv_id(id):
     An arXiv identifier follows the pattern: YYYY.NNNN or YYYY.NNNNN,
     optionally followed by 'v' and a version number.
 
-    TODO implement old scheme
+    To match old identifiers, whose patterns is an absolute mess, prefix with `arXiv:`
+
     https://info.arxiv.org/help/arxiv_identifier.html
     https://info.arxiv.org/help/arxiv_identifier_for_services.html
     """
-    pattern = r"^\d{4}\.\d{4,5}(v\d+)?$"
-    return re.match(pattern, id) is not None
+    old = r"^arXiv:.*$"
+    new = r"^\d{4}\.\d{4,5}(v\d+)?$"
+
+    return re.match(old, id) or re.match(new, id)
 
 
 def is_mathscinet_id(id):
@@ -79,6 +82,9 @@ def make_argument_list(func):
 
 @make_argument_list
 def get_arxiv(ids):
+    # get rid of arXiv: prefix if needed
+    ids = [id.split(":")[-1] for id in ids]
+
     entries = arxiv.Client().results(arxiv.Search(id_list=list(ids)))
     entries = map(arxiv2biblatex, ids, entries)
 
