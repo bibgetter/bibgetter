@@ -46,10 +46,10 @@ def arxiv2biblatex(key, entry):
     One has to specify the key to be used: often the user will want to cite the current
     version of the preprint without actually specifying the version in the BibTeX key.
     """
+    # the "true" id, including the version number
     id = entry.entry_id.split("/")[-1]
-    authors = " and ".join([author.name for author in entry.authors])
 
-    # TODO add IDS field
+    authors = " and ".join([author.name for author in entry.authors])
 
     return (
         f"@online{{{key},\n"
@@ -58,6 +58,7 @@ def arxiv2biblatex(key, entry):
         f"  year        = {{{entry.updated.year}}},\n"
         f"  eprinttype  = {{arxiv}},\n"
         f"  eprint      = {{{id}}},\n"
+        f"  ids         = {{{id if key != id else ""}}},\n"
         f"  eprintclass = {{{entry.primary_category}}},\n"
         f"}}\n"
     )
