@@ -32,10 +32,11 @@ def is_mathscinet_id(id: str) -> bool:
     """
     Check if the given identifier is a valid MathSciNet ID.
 
-    A valid MathSciNet ID starts with 'MR' followed by 1 to 7 digits.
+    A valid MathSciNet ID starts with `MR` followed by 1 to 7 digits.
+    Alternatively, it starts starts with `mr:`, and then a valid MR identifier.
     """
-    # TODO also match "mr:MR..."
-    pattern = r"^MR\d{1,7}$"
+    pattern = r"^(MR|mr:MR)\d{1,7}$"
+
     return re.match(pattern, id) is not None
 
 
