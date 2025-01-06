@@ -77,8 +77,7 @@ def get_citations(file: str) -> list:
     predefined regular expression patterns.
 
     * `\citation{key}`: basic BibTeX
-    * `\abx@aux@cite{key}`: old biblatex format
-    * `\abx@aux@cite{0}{key}`: new biblatex format
+    * `\abx@aux@cite{0}{key}`: current biblatex format
 
     Args:
         file (str): The content of the file to search for citation keys.
@@ -89,7 +88,6 @@ def get_citations(file: str) -> list:
     patterns = [
         re.compile(r"\\citation\{([^}]+)\}"),
         re.compile(r"\\abx@aux@cite\{0\}\{([^}]+)\}"),
-        re.compile(r"\\abx@aux@cite\{([^}]+)\}"),
     ]
     keys = {key for pattern in patterns for key in pattern.findall(file)}
     return list(keys)
