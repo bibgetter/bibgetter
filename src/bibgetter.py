@@ -335,7 +335,11 @@ def main():
     args = parser.parse_args()
 
     # read the central bibliography file
-    central = bibtexparser.parse_file(CENTRAL_BIBLIOGRAPHY)
+    central = None
+    try:
+        central = bibtexparser.parse_file(CENTRAL_BIBLIOGRAPHY)
+    except FileNotFoundError:
+        pass
 
     # read the local bibliography file (if specified)
     local = None
