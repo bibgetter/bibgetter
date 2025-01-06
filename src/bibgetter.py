@@ -10,6 +10,7 @@ import rich
 import rich.columns
 import requests
 import subprocess
+import sys
 
 # location of the central bibliography file
 CENTRAL_BIBLIOGRAPHY = os.path.expanduser("~/.bibgetter/bibliography.bib")
@@ -347,6 +348,11 @@ def main():
     parser.add_argument("--file", help=".aux file", type=str)
     parser.add_argument("--local", help="local bibliography file", type=str)
     args = parser.parse_args()
+
+    if not len(sys.argv) > 1:
+        rich.print("No arguments provided to bibgetter.")
+        # maybe we could print some help
+        return
 
     # on first run (and all subsequent runs) of bibgetter, try to write configuration
     write_configuration()
