@@ -12,6 +12,14 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
+dependencies = [
+  "argparse",
+  "arxiv",
+  "bibtexparser",
+  "fake_useragent",
+  "requests",
+  "rich",
+]
 
 [project.urls]
 Homepage = "https://github.com/bibgetter/bibgetter"
