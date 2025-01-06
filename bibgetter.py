@@ -174,7 +174,7 @@ ACTIONS = {
 }
 
 
-def keys(bibliography) -> list:
+def bibliography_keys(bibliography) -> list:
     defaults = [entry.key for entry in bibliography.entries]
     alternatives = [
         id
@@ -190,11 +190,11 @@ def add_entries(keys, central) -> bool:
     """
     Add entries to the central bibliography.
 
-    Returns True if the central bibliography was modified.
+    Returns the number of items written to the central bibliography.
     """
-    # take ids, remove the ones already in central file, and look up the missing ones
+    # take keys, remove the ones already in central file, and look up the missing ones
     # ignores local keys
-    missing = [key for key in keys if key not in keys(central)]
+    missing = [key for key in keys if key not in bibliography_keys(central)]
 
     rich.print(
         f"{len(keys) - len(missing)} [default not bold]key(s)"
@@ -208,7 +208,7 @@ def add_entries(keys, central) -> bool:
         f"Looking up {len(missing)} {"entry" if len(missing) == 1 else "entries"}"
     )
 
-    touched = False
+    written = []
 
     for type in ACTIONS:
         (predicate, action) = ACTIONS[type]
@@ -220,8 +220,12 @@ def add_entries(keys, central) -> bool:
             continue
 
         with open(CENTRAL_BIBLIOGRAPHY, "a") as f:
-            f.write(action(matched))
-            touched = True
+            try:
+                f.write(action(matched))
+                written.extend(matched)
+            except Exception as e:
+                rich.print(f"[red]Error in retrieving {type} entries")
+                rich.print(e)
 
         rich.print(
             f"Added {len(matched)}"
@@ -249,34 +253,51 @@ def add_entries(keys, central) -> bool:
             )
         )
 
-    return touched
+    return len(written)
 
 
 def sync_entries(keys, central, local, filename=None):
+    """
+    Synchronize entries from central to local
+
+    Returns the number of newly added entries.
+    """
     # take keys, remove the ones already in local file, and look up the missing ones
     # from the central bibliography file
-    missing = [key for key in keys if key not in keys(local)]
+    missing = [key for key in keys if key not in bibliography_keys(local)]
 
-    output = ""
+    rich.print(f"{len(missing)} [default not bold]key(s) not yet in local file")
+    if not len(missing):
+        return 0
+
+    entries = []
 
     for key in missing:
-        if key not in central(keys):
-            # TODO need to give a useful error
-            print(f"[red]Entry not found in central bibliography: [bold]{key}")
+        if key not in bibliography_keys(central):
+            rich.print(f"[red]Entry not found in central bibliography: [bold]{key}")
             continue
 
-        # TODO also search on ids
-        entry = next(filter(lambda e: e.key == key, central.entries))
-        output += entry.raw + "\n\n"
+        for entry in central.entries:
+            # the key matches
+            if key == entry.key:
+                entries.append(entry)
+                continue
+
+            # one of the alternative keys matches
+            if "ids" in entry and key in entry["ids"].split(","):
+                entries.append(entry)
+                continue
 
     # write to local bibliography (if set)
     if filename is not None:
         with open(filename, "a") as f:
-            f.write(output)
-            # TODO print to stdout that entries were added to the local file (and how many)
-    # else, just print to stdout
-    else:
-        print(output)
+            f.write("\n" + "\n\n".join(entry.raw for entry in entries))
+            rich.print(
+                f"[green]Wrote {len(entries)}"
+                f" {"entry" if len(missing) == 1 else "entries"} to local file"
+            )
+
+    return len(entries)
 
 
 def format(filename):
@@ -331,7 +352,7 @@ def main():
     if args.operation[0] not in ["add", "sync", "pull"]:
         raise (ValueError("Invalid operation"))
 
-    # add the id's from the commandline arguments
+    # add the keys from the commandline arguments
     keys.extend(args.operation[1:])
     keys = list(set(keys))
 
@@ -350,7 +371,12 @@ def main():
         sync_entries(keys, central, local, filename=target)
 
     if args.operation[0] == "pull":
-        add_entries(keys, central)
+        touched = add_entries(keys, central)
+        if touched:
+            format(CENTRAL_BIBLIOGRAPHY)
+
+        # reread the central bibliography file
+        central = bibtexparser.parse_file(CENTRAL_BIBLIOGRAPHY)
         sync_entries(keys, central, local, filename=target)
 
 
