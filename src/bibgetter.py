@@ -175,6 +175,9 @@ ACTIONS = {
 
 
 def bibliography_keys(bibliography) -> list:
+    if not bibliography:
+        return []
+
     defaults = [entry.key for entry in bibliography.entries]
     alternatives = [
         id
@@ -337,7 +340,10 @@ def main():
     # read the local bibliography file (if specified)
     local = None
     if args.local:
-        local = bibtexparser.parse_file(args.local)
+        try:
+            local = bibtexparser.parse_file(args.local)
+        except FileNotFoundError:
+            pass
 
     # the keys of the entries to fetch: commandline arguments and from the .aux file(s)
     keys = []
