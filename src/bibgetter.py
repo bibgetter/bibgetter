@@ -134,8 +134,8 @@ def clean_mathscinet_entry(entry):
     # if numerical part of key less than 7 characters, add long version as alternative
     key = lines[0].split("MR")[1][:-1]
     if len(key) < 7:
-        # not the cleanest way
-        lines = [lines[0]] + [f"  IDS = {{MR{key.rjust(7, "0")}}},"] + lines[1:]
+        long = f"{key.rjust(7, "0")}"
+        lines = [lines[0].replace(key, long)] + [f"  IDS = {{MR{key}}},"] + lines[1:]
 
     return "\n".join(lines)
 
