@@ -1,6 +1,6 @@
 [project]
 name = "bibgetter"
-version = "2.0.0"
+version = "2.0.1"
 authors = [
   { name="Pieter Belmans", email="pieterbelmans@gmail.com " },
 ]
