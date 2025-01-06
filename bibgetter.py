@@ -11,6 +11,9 @@ import rich.columns
 import requests
 import subprocess
 
+# location of the central bibliography file
+CENTRAL_BIBLIOGRAPHY = os.path.expanduser("~/.bibgetter/bibliography.bib")
+
 
 def is_arxiv_id(id: str) -> bool:
     """
@@ -168,9 +171,6 @@ ACTIONS = {
     # TODO implement zbMath and DOI
 }
 
-# location of the central bibliography file
-CENTRAL_BIBLIOGRAPHY = os.path.expanduser("~/.bibgetter/bibliography.bib")
-
 
 def keys(bibliography) -> list:
     defaults = [entry.key for entry in bibliography.entries]
@@ -184,15 +184,15 @@ def keys(bibliography) -> list:
     return defaults + alternatives
 
 
-def add_entries(ids, central_keys) -> bool:
+def add_entries(ids, central) -> bool:
     """
     Add entries to the central bibliography.
 
     Returns True if the central bibliography was modified.
     """
-    # take ids, remove the ones already in central_keys, and look up the missing ones
-    # ignores local keys (warn user they specified local file)
-    missing = [id for id in ids if id not in central_keys]
+    # take ids, remove the ones already in central file, and look up the missing ones
+    # ignores local keys
+    missing = [id for id in ids if id not in keys(central)]
 
     rich.print(
         f"{len(ids) - len(missing)} [default not bold]key(s)"
@@ -250,18 +250,15 @@ def add_entries(ids, central_keys) -> bool:
     return touched
 
 
-def sync_entries(ids, central, local_keys, filename=None):
-    # take ids, remove the ones already in local_keys, and look up the missing ones
+def sync_entries(ids, central, local, filename=None):
+    # take ids, remove the ones already in local file, and look up the missing ones
     # from the central bibliography file
-    missing = [id for id in ids if id not in local_keys]
-
-    central_keys = [entry.key for entry in central.entries]
-    # TODO use keys(central)
+    missing = [id for id in ids if id not in keys(local)]
 
     output = ""
 
     for id in missing:
-        if id not in central_keys:
+        if id not in central(keys):
             # TODO need to give a useful error
             print("Entry not found in central bibliography:", id)
             continue
@@ -313,15 +310,11 @@ def main():
 
     # read the central bibliography file
     central = bibtexparser.parse_file(CENTRAL_BIBLIOGRAPHY)
-    # central_keys = [entry.key for entry in central.entries]
-    central_keys = keys(central)
 
     # read the local bibliography file (if specified)
-    local_keys = []
+    local = None
     if args.local:
         local = bibtexparser.parse_file(args.local)
-        # TODO use keys
-        local_keys = [entry.key for entry in local.entries]
 
     # the id's of the entries to fetch: commandline arguments and from the .aux file(s)
     ids = []
@@ -349,16 +342,16 @@ def main():
         target = args.local
 
     if args.operation[0] == "add":
-        touched = add_entries(ids, central_keys)
+        touched = add_entries(ids, central)
         if touched:
             format(CENTRAL_BIBLIOGRAPHY)
 
     if args.operation[0] == "sync":
-        sync_entries(ids, central, local_keys, filename=target)
+        sync_entries(ids, central, local, filename=target)
 
     if args.operation[0] == "pull":
-        add_entries(ids, central_keys)
-        sync_entries(ids, central, local_keys, filename=target)
+        add_entries(ids, central)
+        sync_entries(ids, central, local, filename=target)
 
 
 if __name__ == "__main__":
