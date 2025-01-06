@@ -2,8 +2,17 @@
 
 For more information, check [bibgetter.github.io](https://bibgetter.github.io).
 
+# Installation
 
-## Workflow
+Running `pip install .` on a local clone should do the trick.
+
+It currently uses the alpha v2 of `bibtexparser`, which following their own instructions
+can be installed as
+
+`pip install --no-cache-dir --force-reinstall git+https://github.com/sciunto-org/python-bibtexparser@main`
+
+
+# Workflow
 
 There is a central BibLaTeX file, located at `~/.bibgetter/bibliography.bib` which acts as
 a central repository for bibliography entries.
