@@ -111,6 +111,10 @@ def make_argument_list(func):
 
 @make_argument_list
 def get_arxiv(ids):
+    # if list of ids is empty, we don't do anything
+    if not ids:
+        return ""
+
     # get rid of arXiv: prefix if needed
     ids = [id.split(":")[-1] for id in ids]
 
@@ -184,7 +188,7 @@ def keys(bibliography) -> list:
     return defaults + alternatives
 
 
-def add_entries(ids, central) -> bool:
+def add_entries(keys, central) -> bool:
     """
     Add entries to the central bibliography.
 
@@ -192,10 +196,10 @@ def add_entries(ids, central) -> bool:
     """
     # take ids, remove the ones already in central file, and look up the missing ones
     # ignores local keys
-    missing = [id for id in ids if id not in keys(central)]
+    missing = [key for key in keys if key not in keys(central)]
 
     rich.print(
-        f"{len(ids) - len(missing)} [default not bold]key(s)"
+        f"{len(keys) - len(missing)} [default not bold]key(s)"
         f" already in central bibliography"
     )
 
@@ -250,21 +254,21 @@ def add_entries(ids, central) -> bool:
     return touched
 
 
-def sync_entries(ids, central, local, filename=None):
-    # take ids, remove the ones already in local file, and look up the missing ones
+def sync_entries(keys, central, local, filename=None):
+    # take keys, remove the ones already in local file, and look up the missing ones
     # from the central bibliography file
-    missing = [id for id in ids if id not in keys(local)]
+    missing = [key for key in keys if key not in keys(local)]
 
     output = ""
 
-    for id in missing:
-        if id not in central(keys):
+    for key in missing:
+        if key not in central(keys):
             # TODO need to give a useful error
-            print("Entry not found in central bibliography:", id)
+            print(f"[red]Entry not found in central bibliography: [bold]{key}")
             continue
 
         # TODO also search on ids
-        entry = next(filter(lambda e: e.key == id, central.entries))
+        entry = next(filter(lambda e: e.key == key, central.entries))
         output += entry.raw + "\n\n"
 
     # write to local bibliography (if set)
@@ -316,42 +320,40 @@ def main():
     if args.local:
         local = bibtexparser.parse_file(args.local)
 
-    # the id's of the entries to fetch: commandline arguments and from the .aux file(s)
-    ids = []
-
-    # TODO make sure to consistenty use keys and ids?
+    # the keys of the entries to fetch: commandline arguments and from the .aux file(s)
+    keys = []
 
     # if args.file is present, read the file(s) and look for citations
     if args.file:
         for filename in glob.glob(args.file):
             with open(filename) as f:
-                ids.extend(get_citations(f.read()))
+                keys.extend(get_citations(f.read()))
                 pass
 
     if args.operation[0] not in ["add", "sync", "pull"]:
         raise (ValueError("Invalid operation"))
 
     # add the id's from the commandline arguments
-    ids.extend(args.operation[1:])
-    ids = list(set(ids))
+    keys.extend(args.operation[1:])
+    keys = list(set(keys))
 
-    rich.print(f"Considering {len(ids)} [default not bold]key(s)")
+    rich.print(f"Considering {len(keys)} [default not bold]key(s)")
 
     target = None
     if hasattr(args, "local"):
         target = args.local
 
     if args.operation[0] == "add":
-        touched = add_entries(ids, central)
+        touched = add_entries(keys, central)
         if touched:
             format(CENTRAL_BIBLIOGRAPHY)
 
     if args.operation[0] == "sync":
-        sync_entries(ids, central, local, filename=target)
+        sync_entries(keys, central, local, filename=target)
 
     if args.operation[0] == "pull":
-        add_entries(ids, central)
-        sync_entries(ids, central, local, filename=target)
+        add_entries(keys, central)
+        sync_entries(keys, central, local, filename=target)
 
 
 if __name__ == "__main__":
