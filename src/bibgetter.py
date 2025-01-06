@@ -13,6 +13,8 @@ import subprocess
 
 # location of the central bibliography file
 CENTRAL_BIBLIOGRAPHY = os.path.expanduser("~/.bibgetter/bibliography.bib")
+# location of the central configuration file
+CENTRAL_CONFIGURATION = os.path.expanduser("~/.bibgetter/bibgetter.conf")
 
 
 def is_arxiv_id(id: str) -> bool:
@@ -303,6 +305,17 @@ def sync_entries(keys, central, local, filename=None):
     return len(entries)
 
 
+def write_configuration():
+    # if the central configuration file does not exist, we put it there
+    if not os.path.exists(CENTRAL_CONFIGURATION):
+        package_directory = os.path.dirname(__file__)
+        default = os.path.join(package_directory, "bibgetter.conf")
+
+        os.makedirs(os.path.dirname(CENTRAL_CONFIGURATION), exist_ok=True)
+        with open(default, "r") as src, open(CENTRAL_CONFIGURATION, "w") as target:
+            target.write(src.read())
+
+
 def format(filename):
     """
     Format the bibliography file using biber.
@@ -318,7 +331,8 @@ def format(filename):
             "--fixinits",
             "--isbn-normalise",
             "--output_encoding=ascii",
-            "--configfile=sort.conf",
+            "--output-align",
+            f"--configfile={CENTRAL_CONFIGURATION}",
             "--validate-datamodel",
             f"--output_file={filename}",
             filename,
@@ -333,6 +347,9 @@ def main():
     parser.add_argument("--file", help=".aux file", type=str)
     parser.add_argument("--local", help="local bibliography file", type=str)
     args = parser.parse_args()
+
+    # on first run (and all subsequent runs) of bibgetter, try to write configuration
+    write_configuration()
 
     # read the central bibliography file
     central = None
