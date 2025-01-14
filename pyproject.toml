@@ -15,7 +15,7 @@ classifiers = [
 dependencies = [
   "argparse",
   "arxiv",
-  "bibtexparser",
+  "bibtexparser>=2.0.0b8",
   "fake_useragent",
   "requests",
   "rich",
