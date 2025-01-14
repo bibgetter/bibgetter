@@ -1,6 +1,9 @@
 # Introduction
 
-For more information, check [bibgetter.github.io](https://bibgetter.github.io).
+`bibgetter` is a tool for mathematicians writing papers in LaTeX,
+making bibliography management easier.
+You can also read this documentation online
+at [`bibgetter.github.io`](htps://bibgetter.github.io).
 
 ## Installation
 
