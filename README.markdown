@@ -2,17 +2,18 @@
 
 For more information, check [bibgetter.github.io](https://bibgetter.github.io).
 
-# Installation
+## Installation
 
-Running `pip install .` on a local clone should do the trick.
+It is best to install it using `pipx`, which is a clean way to install Python applications.
 
-It currently uses the alpha v2 of `bibtexparser`, which following their own instructions
-can be installed as
+As an end user, the best solution is likely to run
 
-`pip install --no-cache-dir --force-reinstall git+https://github.com/sciunto-org/python-bibtexparser@main`
+`pipx install git+https://github.com/bibgetter/bibgetter`
 
+As a developer (so this is a reminder to myself, mostly), it is
 
-# Workflow
+`pipx install --editable --force .`
+
 
 There is a central BibLaTeX file, located at `~/.bibgetter/bibliography.bib` which acts as
 a central repository for bibliography entries.
