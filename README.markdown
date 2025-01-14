@@ -49,7 +49,7 @@ It will not overwrite existing entries.
 
 The anticipated use case is the following:
 
-`bibgetter sync --file article.aux --target bibliography.bib`
+`bibgetter sync --file article.aux --local bibliography.bib`
 
 This option is guaranteed to work offline.
 
@@ -59,6 +59,6 @@ This option is guaranteed to work offline.
 
 So most likely you want to have something like
 
-`bibgetter pull --file article.aux --target bibliography.bib`
+`bibgetter pull --file article.aux --local bibliography.bib`
 
 in your toolchain.
