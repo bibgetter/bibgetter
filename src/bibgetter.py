@@ -341,17 +341,59 @@ def format(filename):
         stdout=subprocess.DEVNULL,
     )
 
+def get_entries(keys, central):
+    """
+    Print entries from the central bibliography to stdout.
+    If an entry is not found, attempt to add it first.
+
+    Args:
+        keys (list): List of bibliography keys to show
+        central (BibtexDatabase): The central bibliography database
+    """
+    if not central:
+        rich.print("[red]No entries found in central bibliography")
+        return
+
+    # First try to add any missing entries
+    touched = add_entries(keys, central)
+    if touched:
+        format(CENTRAL_BIBLIOGRAPHY)
+        # Reload central bibliography with new entries
+        central = bibtexparser.parse_file(CENTRAL_BIBLIOGRAPHY)
+
+    for key in keys:
+        found = False
+        for entry in central.entries:
+            # Check direct key match
+            if key == entry.key:
+                print(entry.raw)
+                found = True
+                break
+            
+            # Check alternative IDs
+            if "ids" in entry and key in entry["ids"].split(","):
+                print(entry.raw)
+                found = True
+                break
+                
+        if not found:
+            rich.print(f"[red]Unable to find or add entry: [bold]{key}")
+
 
 def main():
     parser = argparse.ArgumentParser(description="bibgetter")
-    parser.add_argument("operation", help="Operation to perform", nargs="*")
+    parser.add_argument("operation", help="Operation to perform (add/sync/pull/get)", nargs="*")
     parser.add_argument("--file", help=".aux file", type=str)
     parser.add_argument("--local", help="local bibliography file", type=str)
     args = parser.parse_args()
 
     if not len(sys.argv) > 1:
-        rich.print("No arguments provided to bibgetter.")
-        # maybe we could print some help
+        rich.print("[red]No arguments provided to bibgetter.")
+        rich.print("Allowed operations:")
+        rich.print("  [green]add[/green]  - Add entries to central bibliography")
+        rich.print("  [green]sync[/green] - Sync entries from central to local bibliography")
+        rich.print("  [green]pull[/green] - Add entries to central and sync to local bibliography") 
+        rich.print("  [green]get[/green]  - Print entries from central bibliography")
         return
 
     # on first run (and all subsequent runs) of bibgetter, try to write configuration
@@ -382,8 +424,13 @@ def main():
                 keys.extend(get_citations(f.read()))
                 pass
 
-    if args.operation[0] not in ["add", "sync", "pull"]:
-        raise (ValueError("Invalid operation"))
+    if not args.operation or args.operation[0] not in ["add", "sync", "pull", "get"]:
+        rich.print("[red]Invalid operation provided.")
+        rich.print("Allowed operations:")
+        rich.print("  [green]add[/green]  - Add entries to central bibliography")
+        rich.print("  [green]sync[/green] - Sync entries from central to local bibliography")
+        rich.print("  [green]pull[/green] - Add entries to central and sync to local bibliography")
+        rich.print("  [green]get[/green]  - Print entries from central bibliography")
         return
 
     # add the keys from the commandline arguments
@@ -395,6 +442,11 @@ def main():
     target = None
     if hasattr(args, "local"):
         target = args.local
+
+    if args.operation[0] == "get":
+        # TODO: support local bibliography file here
+        get_entries(keys, central)
+        return
 
     if args.operation[0] == "add":
         touched = add_entries(keys, central)
@@ -412,7 +464,6 @@ def main():
         # reread the central bibliography file
         central = bibtexparser.parse_file(CENTRAL_BIBLIOGRAPHY)
         sync_entries(keys, central, local, filename=target)
-
 
 if __name__ == "__main__":
     main()
