@@ -14,9 +14,10 @@ import sys
 import time
 
 # location of the central bibliography file
-CENTRAL_BIBLIOGRAPHY = os.path.expanduser("~/.bibgetter/bibliography.bib")
-# location of the central configuration file
-CENTRAL_CONFIGURATION = os.path.expanduser("~/.bibgetter/bibgetter.conf")
+BIBGETTER_DIRECTORY = os.getenv("BIBGETTER_DIRECTORY", os.path.expanduser("~/.bibgetter"))
+CENTRAL_BIBLIOGRAPHY = os.path.join(BIBGETTER_DIRECTORY, "bibliography.bib")
+# location of the central configuration file 
+CENTRAL_CONFIGURATION = os.path.join(BIBGETTER_DIRECTORY, "bibgetter.conf")
 
 
 def is_arxiv_id(id: str) -> bool:
@@ -34,7 +35,7 @@ def is_arxiv_id(id: str) -> bool:
     old = r"^arXiv:.*$"
     new = r"^\d{4}\.\d{4,5}(v\d+)?$"
 
-    return re.fullmatch(old, id) or re.fullmatch(new, id)
+    return bool(re.fullmatch(old, id) or re.fullmatch(new, id))
 
 def guess_arxiv_id(id: str) -> str:
     """
@@ -505,14 +506,14 @@ def get_entries(keys, central):
             rich.print(f"[red]Unable to find or add entry: [bold]{key}")
 
 
-def main():
+def main(fake_args=None):
     parser = argparse.ArgumentParser(description="bibgetter")
     parser.add_argument("operation", help="Operation to perform (add/sync/pull/get)", nargs="*")
     parser.add_argument("--file", help=".aux file", type=str)
     parser.add_argument("--local", help="local bibliography file", type=str)
-    args = parser.parse_args()
+    args = parser.parse_args(fake_args)
 
-    if not len(sys.argv) > 1:
+    if not len(fake_args) > 1:
         rich.print("[red]No arguments provided to bibgetter.")
         rich.print("Allowed operations:")
         rich.print("  [green]add[/green]  - Add entries to central bibliography")
