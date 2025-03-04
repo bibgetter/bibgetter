@@ -13,8 +13,8 @@ import subprocess
 import sys
 import time
 
+BIBGETTER_DIRECTORY = os.path.expanduser("~/.bibgetter")
 # location of the central bibliography file
-BIBGETTER_DIRECTORY = os.getenv("BIBGETTER_DIRECTORY", os.path.expanduser("~/.bibgetter"))
 CENTRAL_BIBLIOGRAPHY = os.path.join(BIBGETTER_DIRECTORY, "bibliography.bib")
 # location of the central configuration file 
 CENTRAL_CONFIGURATION = os.path.join(BIBGETTER_DIRECTORY, "bibgetter.conf")
@@ -474,10 +474,6 @@ def get_entries(keys, central):
         keys (list): List of bibliography keys to show
         central (BibtexDatabase): The central bibliography database
     """
-    if not central:
-        rich.print("[red]No entries found in central bibliography")
-        return
-
     # First try to add any missing entries
     touched = add_entries(keys, central)
     if touched:
@@ -511,10 +507,22 @@ def main(fake_args=None):
     parser.add_argument("operation", help="Operation to perform (add/sync/pull/get)", nargs="*")
     parser.add_argument("--file", help=".aux file", type=str)
     parser.add_argument("--local", help="local bibliography file", type=str)
+    parser.add_argument("--data-directory", help="bibgetter directory location", type=str)
     args = parser.parse_args(fake_args)
 
-    if not len(fake_args) > 1:
-        rich.print("[red]No arguments provided to bibgetter.")
+    # Update BIBGETTER_DIRECTORY if --data-directory is provided
+    global BIBGETTER_DIRECTORY
+    if args.data_directory:
+        BIBGETTER_DIRECTORY = args.data_directory
+        global CENTRAL_BIBLIOGRAPHY, CENTRAL_CONFIGURATION
+        CENTRAL_BIBLIOGRAPHY = os.path.join(BIBGETTER_DIRECTORY, "bibliography.bib")
+        CENTRAL_CONFIGURATION = os.path.join(BIBGETTER_DIRECTORY, "bibgetter.conf")
+
+    if not args.operation or args.operation[0] not in ["add", "sync", "pull", "get"]:
+        if not args.operation:
+            rich.print("[red]No operation provided to bibgetter.")
+        else:
+            rich.print("[red]Invalid operation provided.")
         rich.print("Allowed operations:")
         rich.print("  [green]add[/green]  - Add entries to central bibliography")
         rich.print("  [green]sync[/green] - Sync entries from central to local bibliography")
@@ -549,15 +557,6 @@ def main(fake_args=None):
             with open(filename) as f:
                 keys.extend(get_citations(f.read()))
                 pass
-
-    if not args.operation or args.operation[0] not in ["add", "sync", "pull", "get"]:
-        rich.print("[red]Invalid operation provided.")
-        rich.print("Allowed operations:")
-        rich.print("  [green]add[/green]  - Add entries to central bibliography")
-        rich.print("  [green]sync[/green] - Sync entries from central to local bibliography")
-        rich.print("  [green]pull[/green] - Add entries to central and sync to local bibliography")
-        rich.print("  [green]get[/green]  - Print entries from central bibliography")
-        return
 
     # add the keys from the commandline arguments
     keys.extend(args.operation[1:])
