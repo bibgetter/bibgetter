@@ -36,6 +36,21 @@ def is_arxiv_id(id: str) -> bool:
 
     return re.fullmatch(old, id) or re.fullmatch(new, id)
 
+def guess_arxiv_id(id: str) -> str:
+    """
+    Guess the arXiv ID from the given identifier.
+    Accepts both raw arXiv IDs and URLs in various formats.
+    """
+    if is_arxiv_id(id):
+        return id
+    url_pattern = r"^(?:https?://)?arxiv\.org/(?:abs|html|pdf)/(\d{4}\.\d{4,5}(?:v\d+)?)(?:\.pdf)?$"
+    match = re.match(url_pattern, id)
+    if match:
+        arxiv_id = match.group(1)
+        if is_arxiv_id(arxiv_id):
+            return arxiv_id
+    return None
+
 
 def is_mathscinet_id(id: str) -> bool:
     """
@@ -48,6 +63,20 @@ def is_mathscinet_id(id: str) -> bool:
 
     return re.fullmatch(pattern, id) is not None
 
+def guess_mathscinet_id(id: str) -> str:
+    """
+    Guess the MathSciNet ID from the given identifier.
+    Accepts both raw MathSciNet IDs and URLs in various formats.
+    """
+    if is_mathscinet_id(id):
+        return id
+    url_pattern = r"^(?:https?://)?mathscinet\.ams\.org/mathscinet/relay-station\?mr=(\d{1,7})$"
+    match = re.match(url_pattern, id)
+    if match:
+        mr_id = f"MR{match.group(1)}"
+        if is_mathscinet_id(mr_id):
+            return mr_id
+    return None
 
 def is_doi(id: str) -> bool:
     """
@@ -59,6 +88,19 @@ def is_doi(id: str) -> bool:
     pattern = r"^(10\.\d{4,9}(/[-._:;()a-zA-Z0-9]+)+)|(10\.1002(/[^\s/]+)+)$"
     return re.fullmatch(pattern, id) is not None
 
+def guess_doi(id: str) -> str:
+    """
+    Guess the DOI from the given identifier.
+    """
+    # Extract DOI from URL if needed
+    id = re.sub(
+        r"^(?:https?://)?(?:dx\.)?doi\.org/(.+)$",
+        r"\1",
+        id.rstrip("/")
+    )
+    if is_doi(id):
+        return id
+    return None
 
 def arxiv2biblatex(key, entry):
     """
@@ -202,10 +244,14 @@ def get_doi(ids):
     if not ids:
         return ""
     
-    # TODO: accepts DOI as hyperlinks, for example:
-    #   https://doi.org/10.1093/imrn/rnad306
-    #   https://doi.org/10.1307/mmj/20216092
-    # Should handle http as well. Also links to dx.doi.org, whatever that is.
+    # Extract DOI from URLs if needed
+    ids = [
+        re.sub(
+            r"^(?:https?://)?(?:dx\.)?doi\.org/(.+)$",
+            r"\1",
+            id.rstrip("/")
+        ) for id in ids
+    ]
 
     entries = []
     for doi in ids:
@@ -230,14 +276,24 @@ def get_doi(ids):
     return "\n\n".join(entries) + "\n"
 
 
-# pairs of (predicate, action) to resolve the keys
+# triples of (predicate, action, guess) to resolve the keys
 ACTIONS = {
-    "arXiv": (is_arxiv_id, get_arxiv),
-    "MathSciNet": (is_mathscinet_id, get_mathscinet),
-    "DOI": (is_doi, get_doi),
+    "arXiv": (is_arxiv_id, get_arxiv, guess_arxiv_id),
+    "MathSciNet": (is_mathscinet_id, get_mathscinet, guess_mathscinet_id),
+    "DOI": (is_doi, get_doi, guess_doi),
     # TODO implement zbMath
 }
 
+def id_candidates(id):
+    """
+    Return a list of possible canonical IDs for the given identifier.
+    """
+    ids = [id]
+    for (_, _, guess) in ACTIONS.values():
+        candidate = guess(id)
+        if candidate:
+            ids.append(candidate)
+    return ids
 
 def bibliography_keys(bibliography) -> list:
     if not bibliography:
@@ -260,9 +316,10 @@ def add_entries(keys, central) -> bool:
 
     Returns the number of items written to the central bibliography.
     """
-    # take keys, remove the ones already in central file, and look up the missing ones
+    # take keys, canonicalize them, remove the ones already in central file, and look up the missing ones
     # ignores local keys
-    missing = [key for key in keys if key not in bibliography_keys(central)]
+    central_keys = set(bibliography_keys(central))
+    missing = [key for key in keys if not any(id in central_keys for id in id_candidates(key))]
 
     rich.print(
         f"{len(keys) - len(missing)} [default not bold]key(s)"
@@ -279,8 +336,9 @@ def add_entries(keys, central) -> bool:
     written = []
 
     for type in ACTIONS:
-        (predicate, action) = ACTIONS[type]
-
+        (predicate, action, guess) = ACTIONS[type]
+        # replace each id with its guessed id if possible
+        missing = [guess(id) or id for id in missing]
         matched = list(filter(predicate, missing))
         missing = sorted([id for id in missing if id not in matched])
 
@@ -428,19 +486,21 @@ def get_entries(keys, central):
 
     for key in keys:
         found = False
-        for entry in central.entries:
-            # Check direct key match
-            if key == entry.key:
-                print(entry.raw)
-                found = True
-                break
-            
-            # Check alternative IDs
-            if "ids" in entry and key in entry["ids"].split(","):
-                print(entry.raw)
-                found = True
-                break
+        for id in id_candidates(key):
+            for entry in central.entries:
+                # Check direct key match
+                if id == entry.key:
+                    print(entry.raw)
+                    found = True
+                    break
                 
+                # Check alternative IDs
+                if "ids" in entry and id in entry["ids"].split(","):
+                    print(entry.raw)
+                    found = True
+                    break
+            if found:
+                break
         if not found:
             rich.print(f"[red]Unable to find or add entry: [bold]{key}")
 
