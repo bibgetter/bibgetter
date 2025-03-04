@@ -19,7 +19,6 @@ CENTRAL_BIBLIOGRAPHY = os.path.join(BIBGETTER_DIRECTORY, "bibliography.bib")
 # location of the central configuration file 
 CENTRAL_CONFIGURATION = os.path.join(BIBGETTER_DIRECTORY, "bibgetter.conf")
 
-
 def is_arxiv_id(id: str) -> bool:
     """
     Check if the given string is a valid arXiv identifier.
@@ -59,6 +58,8 @@ def is_mathscinet_id(id: str) -> bool:
 
     A valid MathSciNet ID starts with `MR` followed by 1 to 7 digits.
     Alternatively, it starts starts with `mr:`, and then a valid MR identifier.
+    TODO: move the flexibility to the guess_mathscinet_id function, and make this
+    function accept only the canonical form (MR, then exactly seven digits).
     """
     pattern = r"^(MR|mr:MR)\d{1,7}$"
 
@@ -285,9 +286,13 @@ ACTIONS = {
     # TODO implement zbMath
 }
 
-def id_candidates(id):
+def canonical_id_candidates(id):
     """
     Return a list of possible canonical IDs for the given identifier.
+
+    This is used to avoid listing multiple variations of the id in the central bibliography.
+    For example, we don't want to add arXiv pdf URL and arXiv html URL as alternative ids to
+    all arXiv entries, but we want to match them when looking up the entry.
     """
     ids = [id]
     for (_, _, guess) in ACTIONS.values():
@@ -295,6 +300,11 @@ def id_candidates(id):
         if candidate:
             ids.append(candidate)
     return ids
+
+def alternative_ids(entry) -> list:
+    if "ids" in entry:
+        return [id.strip() for id in entry["ids"].split(",")]
+    return []
 
 def bibliography_keys(bibliography) -> list:
     if not bibliography:
@@ -304,14 +314,13 @@ def bibliography_keys(bibliography) -> list:
     alternatives = [
         id
         for entry in bibliography.entries
-        if "ids" in entry
-        for id in entry["ids"].split(",")
+        for id in alternative_ids(entry)
     ]
 
     return defaults + alternatives
 
 
-def add_entries(keys, central) -> bool:
+def add_entries(keys, central):
     """
     Add entries to the central bibliography.
 
@@ -320,7 +329,7 @@ def add_entries(keys, central) -> bool:
     # take keys, canonicalize them, remove the ones already in central file, and look up the missing ones
     # ignores local keys
     central_keys = set(bibliography_keys(central))
-    missing = [key for key in keys if not any(id in central_keys for id in id_candidates(key))]
+    missing = [key for key in keys if not any(id in central_keys for id in canonical_id_candidates(key))]
 
     rich.print(
         f"{len(keys) - len(missing)} [default not bold]key(s)"
@@ -415,6 +424,7 @@ def sync_entries(keys, central, local, filename=None):
 
             # one of the alternative keys matches
             if "ids" in entry and key in entry["ids"].split(","):
+                # TODO: should this write the entry with user-requested key using substitute_bibtex_key()?
                 entries.append(entry)
                 continue
 
@@ -465,6 +475,23 @@ def format(filename):
         stdout=subprocess.DEVNULL,
     )
 
+def substitute_bibtex_key(entry_text, expected_key):
+    """
+    Substitute the record identifier of a bibtex entry.
+
+    We use this to print a bibtex entry with the record identifier that was requested by the user,
+    regardless of the record identifier used in the central bibliography.
+    """
+    lines = entry_text.splitlines()
+    # Extract entry id from first line
+    entry_id = re.search(r'{\s*([^,\s]+)', lines[0]).group(1)
+    lines[0] = lines[0].replace('{' + entry_id, '{' + expected_key)
+    # Replace expected_key with entry_id in ids field
+    for i, line in enumerate(lines):
+        if re.match(r'^\s*ids\s*=', line):
+            lines[i] = re.sub(rf'(^|\s|,){re.escape(expected_key)}(\s|,|$)', rf'\1{entry_id}\2', line)
+    return "\n".join(lines)
+
 def get_entries(keys, central):
     """
     Print entries from the central bibliography to stdout.
@@ -481,19 +508,13 @@ def get_entries(keys, central):
         # Reload central bibliography with new entries
         central = bibtexparser.parse_file(CENTRAL_BIBLIOGRAPHY)
 
+    # Print entries
     for key in keys:
         found = False
-        for id in id_candidates(key):
+        for id in canonical_id_candidates(key):
             for entry in central.entries:
-                # Check direct key match
-                if id == entry.key:
-                    print(entry.raw)
-                    found = True
-                    break
-                
-                # Check alternative IDs
-                if "ids" in entry and id in entry["ids"].split(","):
-                    print(entry.raw)
+                if (id == entry.key) or (id in alternative_ids(entry)):
+                    print(substitute_bibtex_key(entry.raw, key))
                     found = True
                     break
             if found:
@@ -502,9 +523,107 @@ def get_entries(keys, central):
             rich.print(f"[red]Unable to find or add entry: [bold]{key}")
 
 
+def print_defined_aliases(central):
+    """
+    Print all aliases from the central bibliography.
+    """
+    if not central or not central.entries:
+        rich.print("[yellow]No aliases defined")
+        return
+    # Collect all aliases and their targets
+    alias_map = {}
+    for entry in central.entries:
+        if "ids" in entry:
+            ids = alternative_ids(entry)
+            # An alternative id is considered an alias if the canonical key cannot be 
+            # guess()ed from it by any of the ACTIONS.
+            aliases = [id for id in ids if id != entry.key and not any(guess(id) for _, _, guess in ACTIONS.values())]
+            for alias in aliases:
+                alias_map[alias] = entry
+
+    if not alias_map:
+        rich.print("[yellow]No aliases defined")
+        return
+
+    # Sort by alias name and print
+    for alias in sorted(alias_map.keys()):
+        entry = alias_map[alias]
+        authors = "(no author)"
+        if "author" in entry:
+            authors = entry["author"].split(" and ")[0].strip().split(",")[0] # Get first author
+            if " and " in entry["author"]:
+                authors += " et al."
+        title = "(no title)"
+        if "title" in entry:
+            title = entry["title"].strip("{}")  # Remove braces from title
+        rich.print(f"[green]{alias}[/green] → {entry.key} ({authors}: {title})")
+    return
+
+def handle_aliases(central, operation_args):
+    """
+    Handle the alias operation for managing bibliography key aliases by adding them to the 'ids' field.
+    """
+    # If no arguments provided, print existing aliases from ids fields
+    if len(operation_args) == 0:
+        print_defined_aliases(central)
+        return
+    
+    # Check if we have both alias and target
+    if len(operation_args) != 2:
+        rich.print("[red]Usage: bibgetter alias <alias> <target>")
+        return
+        
+    alias = operation_args[0]
+    target = operation_args[1]
+    
+    # First verify/add the target in central bibliography
+    target_entry = None
+    if central:
+        # Find the target entry
+        for entry in central.entries:
+            if target == entry.key:
+                target_entry = entry
+                break
+            if "ids" in entry and target in entry["ids"].split(","):
+                target_entry = entry
+                break
+    
+    if not target_entry:
+        rich.print(f"[yellow]Target '{target}' not found in central bibliography. Attempting to add it...")
+        # Try to add the target
+        touched = add_entries([target], central)
+        if touched:
+            format(CENTRAL_BIBLIOGRAPHY)
+            rich.print(f"[green]Successfully added target '{target}' to central bibliography")
+            # Reload to get the new entry
+            central = bibtexparser.parse_file(CENTRAL_BIBLIOGRAPHY)
+            for entry in central.entries:
+                if target == entry.key:
+                    target_entry = entry
+                    break
+        else:
+            rich.print(f"[red]Failed to add target '{target}'. Aborting alias creation.")
+            return
+    
+    # Add alias to the ids field
+    if "ids" in target_entry:
+        current_ids = alternative_ids(target_entry)
+        if alias not in current_ids:
+            current_ids.append(alias)
+            target_entry["ids"] = ", ".join(current_ids)
+    else:
+        target_entry["ids"] = f"{alias}"
+    
+    # Write back the updated bibliography
+    with open(CENTRAL_BIBLIOGRAPHY, "w") as f:
+        bibtexparser.write_file(f, central)
+        format(CENTRAL_BIBLIOGRAPHY)
+    
+    rich.print(f"[green]Added alias: {alias} → {target}")
+
 def main(fake_args=None):
     parser = argparse.ArgumentParser(description="bibgetter")
-    parser.add_argument("operation", help="Operation to perform (add/sync/pull/get)", nargs="*")
+    parser.add_argument("operation", help="Operation to perform (add/sync/pull/get/alias)", nargs="*")
     parser.add_argument("--file", help=".aux file", type=str)
     parser.add_argument("--local", help="local bibliography file", type=str)
     parser.add_argument("--data-directory", help="bibgetter directory location", type=str)
@@ -518,7 +637,7 @@ def main(fake_args=None):
         CENTRAL_BIBLIOGRAPHY = os.path.join(BIBGETTER_DIRECTORY, "bibliography.bib")
         CENTRAL_CONFIGURATION = os.path.join(BIBGETTER_DIRECTORY, "bibgetter.conf")
 
-    if not args.operation or args.operation[0] not in ["add", "sync", "pull", "get"]:
+    if not args.operation or args.operation[0] not in ["add", "sync", "pull", "get", "alias"]:
         if not args.operation:
             rich.print("[red]No operation provided to bibgetter.")
         else:
@@ -528,6 +647,7 @@ def main(fake_args=None):
         rich.print("  [green]sync[/green] - Sync entries from central to local bibliography")
         rich.print("  [green]pull[/green] - Add entries to central and sync to local bibliography") 
         rich.print("  [green]get[/green]  - Print entries from central bibliography")
+        rich.print("  [green]alias[/green] - Manage bibliography key aliases")
         return
 
     # on first run (and all subsequent runs) of bibgetter, try to write configuration
@@ -539,6 +659,10 @@ def main(fake_args=None):
         central = bibtexparser.parse_file(CENTRAL_BIBLIOGRAPHY)
     except FileNotFoundError:
         pass
+
+    if args.operation[0] == "alias":
+        handle_aliases(central, args.operation[1:])
+        return
 
     # read the local bibliography file (if specified)
     local = None

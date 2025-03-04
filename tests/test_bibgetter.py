@@ -145,3 +145,29 @@ def test_add_various_ids(temp_bibgetter_dir, capsys):
     # Parse bibliography and check number of entries
     bib_database = bibtexparser.parse_file(central_bib)
     assert len(bib_database.entries) == 4
+
+def test_alias(temp_bibgetter_dir, capsys):
+    """Test creating and using bibliography key aliases"""
+    # First add some entries to work with
+    # TODO: avoid network calls here, just provide a pre-made central bibliography file
+    main(['add', 'https://doi.org/10.4171/owr/2024/44', '10.1307/mmj/20216092',
+         '--data-directory', temp_bibgetter_dir])
+    
+    # Create aliases
+    main(['alias', 'owrpaper', '10.4171/owr/2024/44',
+          '--data-directory', temp_bibgetter_dir])
+    main(['alias', 'mmjpaper', '10.1307/mmj/20216092',
+          '--data-directory', temp_bibgetter_dir])
+    
+    # Check aliases are listed correctly
+    main(['alias', '--data-directory', temp_bibgetter_dir])
+    output = capsys.readouterr().out
+    assert 'owrpaper → 10.4171/owr/2024/44' in output
+    assert 'mmjpaper → 10.1307/mmj/20216092' in output
+    
+    # Test getting entries using aliases
+    main(['get', 'owrpaper', 'mmjpaper',
+          '--data-directory', temp_bibgetter_dir])
+    output = capsys.readouterr().out
+    assert '@article{owrpaper,' in output
+    assert '@article{mmjpaper,' in output
