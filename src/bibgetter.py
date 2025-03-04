@@ -11,6 +11,7 @@ import rich.columns
 import requests
 import subprocess
 import sys
+import time
 
 # location of the central bibliography file
 CENTRAL_BIBLIOGRAPHY = os.path.expanduser("~/.bibgetter/bibliography.bib")
@@ -45,6 +46,17 @@ def is_mathscinet_id(id: str) -> bool:
     """
     pattern = r"^(MR|mr:MR)\d{1,7}$"
 
+    return re.fullmatch(pattern, id) is not None
+
+
+def is_doi(id: str) -> bool:
+    """
+    Check if the given string is a valid DOI identifier.
+    
+    DOIs typically start with '10.' followed by a series of numbers,
+    then a forward slash and additional characters.
+    """
+    pattern = r"^(10\.\d{4,9}(/[-._:;()a-zA-Z0-9]+)+)|(10\.1002(/[^\s/]+)+)$"
     return re.fullmatch(pattern, id) is not None
 
 
@@ -168,12 +180,62 @@ def get_mathscinet(ids):
 
     return "\n".join(entries) + "\n"
 
+def clean_doi_entry(entry, doi):
+    # Parse the entry to modify it
+    bib = bibtexparser.parse_string(entry)
+    entry = bib.entries[0]
+    lines = entry.raw.strip().splitlines()
+    # Always link to https
+    for i, line in enumerate(lines):
+        lines[i] = line.replace("http", "https")
+    # Fix the key to be equal to the DOI
+    lines[0] = lines[0].replace(entry.key, doi)
+
+    return "\n".join(lines)
+
+@make_argument_list
+def get_doi(ids):
+    """
+    Fetch BibTeX entries for DOIs using the CrossRef API.
+    """
+    # if list of ids is empty, we don't do anything
+    if not ids:
+        return ""
+    
+    # TODO: accepts DOI as hyperlinks, for example:
+    #   https://doi.org/10.1093/imrn/rnad306
+    #   https://doi.org/10.1307/mmj/20216092
+    # Should handle http as well. Also links to dx.doi.org, whatever that is.
+
+    entries = []
+    for doi in ids:
+        # TODO: figure out if crossref supports requesting multiple DOIs at once
+        url = f"https://api.crossref.org/works/{doi}/transform/application/x-bibtex"
+        r = requests.get(
+            url,
+            headers={"User-Agent": fake_useragent.UserAgent().chrome}
+        )
+        
+        if r.status_code == 404:
+            rich.print(f"[red]DOI {doi} not found")
+            raise Exception(f"DOI {doi} not found")
+        elif r.status_code != 200:
+            rich.print(f"[red]Failed to fetch DOI {doi}: HTTP {r.status_code}")
+            raise Exception(f"Failed to fetch DOI {doi}: HTTP {r.status_code}")
+        
+        entries.append(clean_doi_entry(r.text, doi))
+        if len(ids) > 1:
+            # sleep for 1 second to avoid rate limiting
+            time.sleep(1)
+    return "\n\n".join(entries) + "\n"
+
 
 # pairs of (predicate, action) to resolve the keys
 ACTIONS = {
     "arXiv": (is_arxiv_id, get_arxiv),
     "MathSciNet": (is_mathscinet_id, get_mathscinet),
-    # TODO implement zbMath and DOI
+    "DOI": (is_doi, get_doi),
+    # TODO implement zbMath
 }
 
 
@@ -225,28 +287,31 @@ def add_entries(keys, central) -> bool:
         if not matched:
             continue
 
+        action_failed = False
         with open(CENTRAL_BIBLIOGRAPHY, "a") as f:
             try:
                 f.write(action(matched))
                 written.extend(matched)
             except Exception as e:
+                action_failed = True
                 rich.print(f"[red]Error in retrieving {type} entries")
                 rich.print(e)
 
-        rich.print(
-            f"Added {len(matched)}"
-            f" {"entry" if len(matched) == 1 else "entries"} from {type}"
-        )
-        rich.print(
-            rich.padding.Padding(
-                rich.columns.Columns(
-                    [f"[green not bold]{key}" for key in matched],
-                    equal=True,
-                    expand=True,
-                ),
-                (0, 0, 0, 4),
+        if not action_failed:
+            rich.print(
+                f"Added {len(matched)}"
+                f" {"entry" if len(matched) == 1 else "entries"} from {type}"
             )
-        )
+            rich.print(
+                rich.padding.Padding(
+                    rich.columns.Columns(
+                        [f"[green not bold]{key}" for key in matched],
+                        equal=True,
+                        expand=True,
+                    ),
+                    (0, 0, 0, 4),
+                )
+            )
 
     if missing:
         rich.print(f"Could not recognize {len(missing)} keys:")
