@@ -489,7 +489,7 @@ def substitute_bibtex_key(entry_text, expected_key):
     # Replace expected_key with entry_id in ids field
     for i, line in enumerate(lines):
         if re.match(r'^\s*ids\s*=', line):
-            lines[i] = re.sub(rf'(^|\s|,){re.escape(expected_key)}(\s|,|$)', rf'\1{entry_id}\2', line)
+            lines[i] = re.sub(rf'([^\w]|^){re.escape(expected_key)}([^\w]|$)', rf'\g<1>{entry_id}\g<2>', line)
     return "\n".join(lines)
 
 def get_entries(keys, central):
