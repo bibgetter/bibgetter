@@ -16,8 +16,8 @@ import time
 BIBGETTER_DIRECTORY = os.path.expanduser("~/.bibgetter")
 # location of the central bibliography file
 CENTRAL_BIBLIOGRAPHY = os.path.join(BIBGETTER_DIRECTORY, "bibliography.bib")
-# location of the central configuration file 
-CENTRAL_CONFIGURATION = os.path.join(BIBGETTER_DIRECTORY, "bibgetter.conf")
+# location of the central configuration file (for biber formatting)
+CENTRAL_CONFIGURATION = os.path.join(BIBGETTER_DIRECTORY, "biber-formatting.conf")
 
 def is_arxiv_id(id: str) -> bool:
     """
@@ -444,7 +444,7 @@ def write_configuration():
     # if the central configuration file does not exist, we put it there
     if not os.path.exists(CENTRAL_CONFIGURATION):
         package_directory = os.path.dirname(__file__)
-        default = os.path.join(package_directory, "bibgetter.conf")
+        default = os.path.join(package_directory, "biber-formatting.conf")
 
         os.makedirs(os.path.dirname(CENTRAL_CONFIGURATION), exist_ok=True)
         with open(default, "r") as src, open(CENTRAL_CONFIGURATION, "w") as target:
@@ -635,7 +635,7 @@ def main(fake_args=None):
         BIBGETTER_DIRECTORY = args.data_directory
         global CENTRAL_BIBLIOGRAPHY, CENTRAL_CONFIGURATION
         CENTRAL_BIBLIOGRAPHY = os.path.join(BIBGETTER_DIRECTORY, "bibliography.bib")
-        CENTRAL_CONFIGURATION = os.path.join(BIBGETTER_DIRECTORY, "bibgetter.conf")
+        CENTRAL_CONFIGURATION = os.path.join(BIBGETTER_DIRECTORY, "biber-formatting.conf")
 
     if not args.operation or args.operation[0] not in ["add", "sync", "pull", "get", "alias"]:
         if not args.operation:
