@@ -178,3 +178,5 @@ def test_alias_with_guess(temp_bibgetter_dir, capsys):
           '--data-directory', temp_bibgetter_dir])
     output = capsys.readouterr().out
     assert 'Added alias' in output
+    assert '@online{okawa-irr' in output
+    

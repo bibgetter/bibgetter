@@ -608,6 +608,7 @@ def handle_aliases(central, operation_args):
         format(CENTRAL_BIBLIOGRAPHY)
     
     rich.print(f"[green]Added alias: {alias} → {target}")
+    print(substitute_bibtex_key(target_entry.raw, alias))
 
 def main(fake_args=None):
     parser = argparse.ArgumentParser(description="bibgetter")
