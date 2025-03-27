@@ -416,17 +416,10 @@ def sync_entries(keys, central, local, filename=None):
             rich.print(f"[red]Entry not found in central bibliography: [bold]{key}")
             continue
 
-        for entry in central.entries:
-            # the key matches
-            if key == entry.key:
-                entries.append(entry)
-                continue
-
-            # one of the alternative keys matches
-            if "ids" in entry and key in entry["ids"].split(","):
-                # TODO: should this write the entry with user-requested key using substitute_bibtex_key()?
-                entries.append(entry)
-                continue
+        entry = find_entry(key, central)
+        if entry:
+            entries.append(entry)
+            continue
 
     # write to local bibliography (if set)
     if filename is not None:
@@ -492,6 +485,18 @@ def substitute_bibtex_key(entry_text, expected_key):
             lines[i] = re.sub(rf'([^\w]|^){re.escape(expected_key)}([^\w]|$)', rf'\g<1>{entry_id}\g<2>', line)
     return "\n".join(lines)
 
+def find_entry(key, central):
+    """
+    Returns the entry matching user-provided key, handling aliases and variants such as URLs
+    """
+    found_entry = None
+    key_variants = canonical_id_candidates(key)
+    for entry in central.entries:
+        if (entry.key in key_variants) or (key in alternative_ids(entry)):
+            found_entry = entry
+            break
+    return found_entry
+
 def get_entries(keys, central):
     """
     Print entries from the central bibliography to stdout.
@@ -510,18 +515,11 @@ def get_entries(keys, central):
 
     # Print entries
     for key in keys:
-        found = False
-        for id in canonical_id_candidates(key):
-            for entry in central.entries:
-                if (id == entry.key) or (id in alternative_ids(entry)):
-                    print(substitute_bibtex_key(entry.raw, key))
-                    found = True
-                    break
-            if found:
-                break
-        if not found:
+        entry = find_entry(key, central)
+        if entry:
+            print(substitute_bibtex_key(entry.raw, key))
+        else:
             rich.print(f"[red]Unable to find or add entry: [bold]{key}")
-
 
 def print_defined_aliases(central):
     """
@@ -530,7 +528,6 @@ def print_defined_aliases(central):
     if not central or not central.entries:
         rich.print("[yellow]No aliases defined")
         return
-    # Collect all aliases and their targets
     alias_map = {}
     for entry in central.entries:
         if "ids" in entry:
@@ -575,32 +572,23 @@ def handle_aliases(central, operation_args):
         
     alias = operation_args[0]
     target = operation_args[1]
-    
+
     # First verify/add the target in central bibliography
     target_entry = None
     if central:
-        # Find the target entry
-        for entry in central.entries:
-            if target == entry.key:
-                target_entry = entry
-                break
-            if "ids" in entry and target in entry["ids"].split(","):
-                target_entry = entry
-                break
+        target_entry = find_entry(target, central)
     
     if not target_entry:
         rich.print(f"[yellow]Target '{target}' not found in central bibliography. Attempting to add it...")
-        # Try to add the target
         touched = add_entries([target], central)
         if touched:
             format(CENTRAL_BIBLIOGRAPHY)
             rich.print(f"[green]Successfully added target '{target}' to central bibliography")
-            # Reload to get the new entry
             central = bibtexparser.parse_file(CENTRAL_BIBLIOGRAPHY)
-            for entry in central.entries:
-                if target == entry.key:
-                    target_entry = entry
-                    break
+            target_entry = find_entry(target, central)
+            if not target_entry:
+                rich.print(f"[red] Internal error: entry '{target}' successfully added, but not found afterwards!")
+                return
         else:
             rich.print(f"[red]Failed to add target '{target}'. Aborting alias creation.")
             return

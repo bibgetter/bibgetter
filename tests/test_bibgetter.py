@@ -171,3 +171,10 @@ def test_alias(temp_bibgetter_dir, capsys):
     output = capsys.readouterr().out
     assert '@article{owrpaper,' in output
     assert '@article{mmjpaper,' in output
+
+def test_alias_with_guess(temp_bibgetter_dir, capsys):
+    """Test that adding an alias to a non-existent bibliography record creates it"""
+    main(['alias', 'okawa-irr', 'https://arxiv.org/abs/2304.14048',
+          '--data-directory', temp_bibgetter_dir])
+    output = capsys.readouterr().out
+    assert 'Added alias' in output
