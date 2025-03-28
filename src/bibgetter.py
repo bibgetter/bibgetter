@@ -36,7 +36,7 @@ def is_arxiv_id(id: str) -> bool:
 
     return bool(re.fullmatch(old, id) or re.fullmatch(new, id))
 
-def guess_arxiv_id(id: str) -> str:
+def guess_arxiv_id(id: str) -> str | dict[str, str] | None:
     """
     Guess the arXiv ID from the given identifier.
     Accepts both raw arXiv IDs and URLs in various formats.
@@ -65,7 +65,7 @@ def is_mathscinet_id(id: str) -> bool:
 
     return re.fullmatch(pattern, id) is not None
 
-def guess_mathscinet_id(id: str) -> str:
+def guess_mathscinet_id(id: str) -> str | dict[str, str] | None:
     """
     Guess the MathSciNet ID from the given identifier.
     Accepts both raw MathSciNet IDs and URLs in various formats.
@@ -85,14 +85,24 @@ def is_doi(id: str) -> bool:
     Check if the given string is a valid DOI identifier.
     
     DOIs typically start with '10.' followed by a series of numbers,
-    then a forward slash and additional characters.
+    then a forward slash and additional characters ("suffix").
     """
     pattern = r"^(10\.\d{4,9}(/[-._:;()a-zA-Z0-9]+)+)|(10\.1002(/[^\s/]+)+)$"
     return re.fullmatch(pattern, id) is not None
 
-def guess_doi(id: str) -> str:
+def guess_doi(id: str) -> str | dict[str, str] | None:
     """
     Guess the DOI from the given identifier.
+
+    The original design principle of bibgetter was to use the canonical ID as the primary
+    record identifier for a bibliography item. This does not work for DOIs since they could
+    include parentheses and other symbols which are not allowed in record identifiers. Thus
+    for some DOIs this function returns a dictionary with 'actual_id' and 'bibtex_id' keys
+    instead of just a single string.
+
+    There seems to be no standard description of what a valid record identifier could be since
+    biber/bibtex/bibtool/etc each have their own non-identical parsers, see 
+    https://tex.stackexchange.com/a/582026 .
     """
     # Extract DOI from URL if needed
     id = re.sub(
@@ -101,7 +111,12 @@ def guess_doi(id: str) -> str:
         id.rstrip("/")
     )
     if is_doi(id):
-        return id
+        forbidden_symbols = '(){}#%\\=,"\''
+        cleaned_id = ''.join([c for c in id if c not in forbidden_symbols])
+        if cleaned_id != id:
+            return {'actual_id': id, 'bibtex_id': cleaned_id}
+        else:
+            return cleaned_id
     return None
 
 def arxiv2biblatex(key, entry):
@@ -232,7 +247,11 @@ def clean_doi_entry(entry, doi):
     # Always link to https
     for i, line in enumerate(lines):
         lines[i] = line.replace("http", "https")
-    # Fix the key to be equal to the DOI
+    # Fix the key to be equal to the DOI, or rather to the sanitized version of DOI if necessary
+    # (e.g., when DOI includes parentheses using it as a record key leads to biber parsing error)
+    guessed_doi = guess_doi(doi)
+    if isinstance(guessed_doi, dict) and 'bibtex_id' in guessed_doi:
+        doi = guessed_doi['bibtex_id']
     lines[0] = lines[0].replace(entry.key, doi)
 
     return "\n".join(lines)
@@ -288,7 +307,7 @@ ACTIONS = {
 
 def canonical_id_candidates(id):
     """
-    Return a list of possible canonical IDs for the given identifier.
+    Return a list of possible canonical bibtex IDs for the given identifier.
 
     This is used to avoid listing multiple variations of the id in the central bibliography.
     For example, we don't want to add arXiv pdf URL and arXiv html URL as alternative ids to
@@ -297,7 +316,9 @@ def canonical_id_candidates(id):
     ids = [id]
     for (_, _, guess) in ACTIONS.values():
         candidate = guess(id)
-        if candidate:
+        if isinstance(candidate, dict) and 'bibtex_id' in candidate:
+            ids.append(candidate['bibtex_id'])
+        elif candidate:
             ids.append(candidate)
     return ids
 
@@ -347,9 +368,26 @@ def add_entries(keys, central):
 
     for type in ACTIONS:
         (predicate, action, guess) = ACTIONS[type]
-        # replace each id with its guessed id if possible
-        missing = [guess(id) or id for id in missing]
-        matched = list(filter(predicate, missing))
+        # Select ids to process for the current action type,
+        # transforming ID variants (hyperlinks, etc) into actual IDs using the 
+        # corresponding guess() function.
+        # `matched` is a sublist of `missing` consisting of keys that we process, while
+        # `ids_to_process` has canonicalized ID variants corresponding to keys in `matched`.
+        matched = []
+        ids_to_process = []
+        for id in missing:
+            if predicate(id):
+                ids_to_process.append(id)
+                matched.append(id)
+            else:
+                guessed_id = guess(id)
+                # Sometimes guessed_id includes, separately, an ID to use in action() and a preferred
+                # ID to use as a bibtex record identifier. Here we only need the former.
+                if isinstance(guessed_id, dict) and 'actual_id' in guessed_id:
+                    guessed_id = guessed_id['actual_id']
+                if guessed_id:
+                    ids_to_process.append(guessed_id)
+                    matched.append(id)
         missing = sorted([id for id in missing if id not in matched])
 
         if not matched:
@@ -358,8 +396,8 @@ def add_entries(keys, central):
         action_failed = False
         with open(CENTRAL_BIBLIOGRAPHY, "a") as f:
             try:
-                f.write(action(matched))
-                written.extend(matched)
+                f.write(action(ids_to_process))
+                written.extend(ids_to_process)
             except Exception as e:
                 action_failed = True
                 rich.print(f"[red]Error in retrieving {type} entries")
@@ -489,6 +527,8 @@ def find_entry(key, central):
     """
     Returns the entry matching user-provided key, handling aliases and variants such as URLs
     """
+    if not central:
+        return None
     found_entry = None
     key_variants = canonical_id_candidates(key)
     for entry in central.entries:

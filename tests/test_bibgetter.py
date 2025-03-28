@@ -110,7 +110,33 @@ def test_get_dois(temp_bibgetter_dir, capsys):
     # Verify DOIs are in the entries
     dois = [entry.key for entry in bib_database.entries]
     assert '10.4171/owr/2024/44' in dois
-    assert '10.1307/mmj/20216092' in dois 
+    assert '10.1307/mmj/20216092' in dois
+
+def test_get_dois_with_parentheses(temp_bibgetter_dir, capsys):
+    """Test that DOIs with parentheses in them are handled correctly."""
+    main(['get', 'https://doi.org/10.1016/S0022-4049(97)00152-7',
+         '--data-directory', temp_bibgetter_dir])
+    output = capsys.readouterr().out
+    # Previously the parentheses were included in the identifier, which caused
+    # biber formatting command to stop. We check that this didn't happen by checking
+    # that the bibliography record is properly formatted, in particular laid out over
+    # several lines.
+    lines = output.splitlines()
+    # Find the line containing "Keller"
+    keller_line = None
+    for i, line in enumerate(lines):
+        if "Keller" in line:
+            keller_line = i
+            break
+    # Find the line containing "volume"
+    volume_line = None
+    for i, line in enumerate(lines):
+        if "volume" in line:
+            volume_line = i
+            break
+    assert keller_line is not None
+    assert volume_line is not None
+    assert keller_line != volume_line
 
 def test_get_is_cached(temp_bibgetter_dir, capsys):
     """Test that second get request is faster due to caching"""
@@ -179,4 +205,4 @@ def test_alias_with_guess(temp_bibgetter_dir, capsys):
     output = capsys.readouterr().out
     assert 'Added alias' in output
     assert '@online{okawa-irr' in output
-    
+
