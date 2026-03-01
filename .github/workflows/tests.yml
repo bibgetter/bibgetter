@@ -34,11 +34,9 @@ jobs:
           pip install --pre "bibtexparser>=2.0.0b8"
           pip install -e ".[dev]"
       - name: Run unit tests (no network)
-        run: >
-          python -m pytest tests/ -q
-          -k "not (get_dois or add_various or alias or arxiv_multiple
-               or central_bibliography or add_does_not or format_preserves
-               or test_get_is)"
+        run: |
+          python -m pytest tests/ -q \
+            -k "not (get_dois or add_various or alias or arxiv_multiple or central_bibliography or add_does_not or format_preserves or test_get_is)"
 
   integration:
     name: integration tests (network)
