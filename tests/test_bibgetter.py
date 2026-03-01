@@ -1,6 +1,9 @@
 import pytest
 import re
 from bibgetter import (
+    BibgetterConfig,
+    bibitems,
+    get_citations,
     main,
     is_arxiv_id,
     is_doi,
@@ -40,6 +43,131 @@ def test_no_args(capsys):
     assert "sync" in output
     assert "pull" in output
     assert "get" in output
+    assert "bibitems" in output
+
+
+# ---------------------------------------------------------------------------
+# BibgetterConfig dataclass
+# ---------------------------------------------------------------------------
+
+
+def test_bibgetter_config_default_paths():
+    """Default config points to ~/.bibgetter."""
+    config = BibgetterConfig()
+    assert config.directory == os.path.expanduser("~/.bibgetter")
+    assert config.bibliography.endswith("bibliography.bib")
+    assert config.configuration.endswith("biber-formatting.conf")
+
+
+def test_bibgetter_config_from_directory(tmp_path):
+    """from_directory() creates a config rooted at the given path."""
+    config = BibgetterConfig.from_directory(str(tmp_path))
+    assert config.directory == str(tmp_path)
+    assert config.bibliography == str(tmp_path / "bibliography.bib")
+    assert config.configuration == str(tmp_path / "biber-formatting.conf")
+
+
+def test_bibgetter_config_frozen():
+    """BibgetterConfig is immutable; assigning to a field raises an error."""
+    config = BibgetterConfig()
+    import dataclasses
+
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        config.directory = "/tmp/evil"
+
+
+# ---------------------------------------------------------------------------
+# get_citations – aux file pattern coverage
+# ---------------------------------------------------------------------------
+
+
+def test_get_citations_basic_bibtex():
+    r"""\citation{key} is matched (standard BibTeX / natbib)."""
+    content = r"\citation{some-key}"
+    assert "some-key" in get_citations(content)
+
+
+def test_get_citations_biblatex_current():
+    r"""\abx@aux@cite{0}{key} is matched (current biblatex with refsection arg)."""
+    content = r"\abx@aux@cite{0}{some-key}"
+    assert "some-key" in get_citations(content)
+
+
+def test_get_citations_biblatex_old():
+    r"""\abx@aux@cite{key} is matched (older biblatex without refsection arg)."""
+    content = r"\abx@aux@cite{some-key}"
+    assert "some-key" in get_citations(content)
+
+
+def test_get_citations_deduplicates():
+    """The same key cited twice appears only once."""
+    content = r"\citation{key}" + "\n" + r"\citation{key}"
+    assert get_citations(content).count("key") == 1
+
+
+def test_get_citations_nested_aux(tmp_path):
+    r"""\@input{child.aux} causes the child file to be parsed recursively."""
+    child = tmp_path / "chapter.aux"
+    child.write_text(r"\citation{child-key}")
+    parent_content = r"\@input{chapter.aux}"
+    keys = get_citations(parent_content, base_dir=str(tmp_path))
+    assert "child-key" in keys
+
+
+def test_get_citations_no_base_dir_ignores_nested():
+    r"""Without base_dir, \@input references are ignored."""
+    content = r"\@input{chapter.aux}" + "\n" + r"\citation{top-key}"
+    keys = get_citations(content, base_dir=None)
+    assert "top-key" in keys
+    # No attempt to open chapter.aux
+    assert len(keys) == 1
+
+
+# ---------------------------------------------------------------------------
+# --file with multiple aux files (nargs='+')
+# ---------------------------------------------------------------------------
+
+
+def test_add_multiple_aux_files(temp_bibgetter_dir, tmp_path, capsys):
+    """--file accepts multiple paths; citations from all files are collected."""
+    aux1 = tmp_path / "a.aux"
+    aux2 = tmp_path / "b.aux"
+    # Use IDs that are already in the test bibliography so no network call is
+    # made; we only care that both files are parsed.
+    aux1.write_text(r"\citation{dummy-key-1}")
+    aux2.write_text(r"\citation{dummy-key-2}")
+    # Both files are unrecognisable IDs; the important part is that bibgetter
+    # sees 2 keys total (not 0 or 1) and tries to look them up.
+    main(
+        [
+            "add",
+            "--file",
+            str(aux1),
+            str(aux2),
+            "--data-directory",
+            temp_bibgetter_dir,
+        ]
+    )
+    output = capsys.readouterr().out
+    # bibgetter should report considering 2 keys
+    assert "Considering 2" in output
+
+
+# ---------------------------------------------------------------------------
+# bibitems – error handling when required tools are absent
+# ---------------------------------------------------------------------------
+
+
+def test_bibitems_missing_tools(temp_bibgetter_dir, tmp_path, capsys, monkeypatch):
+    """bibitems() prints an error when required tools (pdftotext etc.) are absent."""
+    # Monkeypatch shutil.which to report all tools as missing
+    monkeypatch.setattr("bibgetter.shutil.which", lambda _: None)
+    bib = tmp_path / "test.bib"
+    bib.write_text(r"")
+    config = BibgetterConfig.from_directory(temp_bibgetter_dir)
+    bibitems(str(bib), config)
+    output = capsys.readouterr().out
+    assert "not found" in output.lower()
 
 
 @pytest.mark.parametrize(
