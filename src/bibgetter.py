@@ -1,6 +1,7 @@
 import argparse
 import arxiv
 import bibtexparser
+from dataclasses import dataclass
 import fake_useragent
 import json
 import glob
@@ -9,15 +10,49 @@ import re
 import rich
 import rich.columns
 import requests
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 
-BIBGETTER_DIRECTORY = os.path.expanduser("~/.bibgetter")
-# location of the central bibliography file
-CENTRAL_BIBLIOGRAPHY = os.path.join(BIBGETTER_DIRECTORY, "bibliography.bib")
-# location of the central configuration file (for biber formatting)
-CENTRAL_CONFIGURATION = os.path.join(BIBGETTER_DIRECTORY, "biber-formatting.conf")
+# ---------------------------------------------------------------------------
+# Configuration dataclass (replaces module-level globals)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class BibgetterConfig:
+    """
+    Immutable configuration object holding all file-system paths used by
+    bibgetter.
+
+    Using a frozen dataclass eliminates the module-level mutable globals that
+    previously required ``global`` statements in ``main()`` and made direct
+    testing of helper functions impossible (see design.md).
+
+    Usage::
+
+        config = BibgetterConfig()                       # default ~/.bibgetter
+        config = BibgetterConfig.from_directory(tmpdir)  # custom location
+    """
+
+    directory: str = os.path.expanduser("~/.bibgetter")
+
+    @property
+    def bibliography(self) -> str:
+        """Full path to the central bibliography file."""
+        return os.path.join(self.directory, "bibliography.bib")
+
+    @property
+    def configuration(self) -> str:
+        """Full path to the biber formatting configuration file."""
+        return os.path.join(self.directory, "biber-formatting.conf")
+
+    @classmethod
+    def from_directory(cls, directory: str) -> "BibgetterConfig":
+        """Create a config rooted at an arbitrary directory (used for testing)."""
+        return cls(directory=directory)
 
 
 def is_arxiv_id(id: str) -> bool:
@@ -149,27 +184,55 @@ def arxiv2biblatex(key, entry):
     )
 
 
-def get_citations(file: str) -> list:
+def get_citations(content: str, base_dir: str | None = None) -> list:
     r"""
-    Extract citation keys from the given file.
+    Extract citation keys from the content of a ``.aux`` file.
 
-    This function searches for citation keys in the provided file content using
-    predefined regular expression patterns.
+    The following patterns are recognised:
 
-    * `\citation{key}`: basic BibTeX
-    * `\abx@aux@cite{0}{key}`: current biblatex format
+    * ``\citation{key}`` -- standard BibTeX; also used by natbib, apacite,
+      and other BibTeX-compatible packages.
+    * ``\abx@aux@cite{0}{key}`` -- biblatex (current format, with refsection
+      argument).
+    * ``\abx@aux@cite{key}`` -- biblatex (older format, without refsection
+      argument).
+    * ``\@input{child.aux}`` -- when a LaTeX document uses ``\include``, the
+      root ``.aux`` file delegates to per-chapter ``.aux`` files.  These are
+      followed recursively when ``base_dir`` is provided.
 
     Args:
-        file (str): The content of the file to search for citation keys.
+        content:  The raw text of a ``.aux`` file.
+        base_dir: Directory containing the ``.aux`` file; used to resolve
+            ``\@input`` references.  Pass ``None`` to disable recursive
+            processing.
 
     Returns:
-        list: A list of unique citation keys found in the file.
+        A deduplicated list of citation keys.
     """
     patterns = [
         re.compile(r"\\citation\{([^}]+)\}"),
         re.compile(r"\\abx@aux@cite\{0\}\{([^}]+)\}"),
+        re.compile(r"\\abx@aux@cite\{([^}0][^}]*)\}"),
     ]
-    keys = {key for pattern in patterns for key in pattern.findall(file)}
+    keys: set[str] = set()
+    for pattern in patterns:
+        keys.update(pattern.findall(content))
+
+    # Recurse into child .aux files if the caller provided a base directory.
+    if base_dir is not None:
+        for child_name in re.findall(r"\\@input\{([^}]+)\}", content):
+            child_path = os.path.join(base_dir, child_name)
+            if os.path.isfile(child_path):
+                try:
+                    with open(child_path) as fh:
+                        keys.update(
+                            get_citations(
+                                fh.read(), base_dir=os.path.dirname(child_path)
+                            )
+                        )
+                except OSError:
+                    pass
+
     return list(keys)
 
 
@@ -368,7 +431,7 @@ def bibliography_keys(bibliography) -> list:
     return defaults + alternatives
 
 
-def add_entries(keys, central) -> int:
+def add_entries(keys, central, config: BibgetterConfig) -> int:
     """
     Add entries to the central bibliography.
 
@@ -425,7 +488,7 @@ def add_entries(keys, central) -> int:
             continue
 
         action_failed = False
-        with open(CENTRAL_BIBLIOGRAPHY, "a") as f:
+        with open(config.bibliography, "a") as f:
             try:
                 f.write(action(ids_to_process))
                 written.extend(ids_to_process)
@@ -502,18 +565,21 @@ def sync_entries(keys, central, local, filename=None) -> int:
     return len(entries)
 
 
-def write_configuration():
-    # if the central configuration file does not exist, we put it there
-    if not os.path.exists(CENTRAL_CONFIGURATION):
+def write_configuration(config: BibgetterConfig):
+    """
+    Copy the bundled biber-formatting.conf to the config directory if it does
+    not already exist.
+    """
+    if not os.path.exists(config.configuration):
         package_directory = os.path.dirname(__file__)
         default = os.path.join(package_directory, "biber-formatting.conf")
 
-        os.makedirs(os.path.dirname(CENTRAL_CONFIGURATION), exist_ok=True)
-        with open(default, "r") as src, open(CENTRAL_CONFIGURATION, "w") as target:
+        os.makedirs(os.path.dirname(config.configuration), exist_ok=True)
+        with open(default, "r") as src, open(config.configuration, "w") as target:
             target.write(src.read())
 
 
-def format(filename):
+def format(filename, config: BibgetterConfig):
     """
     Format the bibliography file using biber.
 
@@ -522,11 +588,13 @@ def format(filename):
     and so on.
 
     Flags used:
-      --output-legacy-dates  keep ``year`` as-is instead of converting to
-                             biber's canonical ``date`` field.
-      --output-safechars     use ASCII-safe character representations.
-      --fixinits             normalise author initials.
-      --isbn-normalise       normalise ISBN formatting.
+
+    * ``--output-legacy-dates``  keep ``year`` as-is instead of converting to
+      biber's canonical ``date`` field.
+    * ``--output-safechars``     use ASCII-safe character representations.
+    * ``--fixinits``             normalise author initials.
+    * ``--isbn-normalise``       normalise ISBN formatting.
+
     The biber-formatting.conf configuration additionally preserves ``journal``
     (rather than converting to ``journaltitle``) and sorts entries by key.
     """
@@ -540,7 +608,7 @@ def format(filename):
             "--output_encoding=ascii",
             "--output-align",
             "--output-legacy-dates",
-            f"--configfile={CENTRAL_CONFIGURATION}",
+            f"--configfile={config.configuration}",
             "--validate-datamodel",
             f"--output_file={filename}",
             filename,
@@ -595,21 +663,23 @@ def find_entry(key, central):
     return found_entry
 
 
-def get_entries(keys, central):
+def get_entries(keys, central, config: BibgetterConfig):
     """
     Print entries from the central bibliography to stdout.
+
     If an entry is not found, attempt to add it first.
 
     Args:
-        keys (list): List of bibliography keys to show
-        central (BibtexDatabase): The central bibliography database
+        keys:    List of bibliography keys to show.
+        central: The central bibliography database (may be ``None``).
+        config:  Paths configuration object.
     """
     # First try to add any missing entries
-    touched = add_entries(keys, central)
+    touched = add_entries(keys, central, config)
     if touched:
-        format(CENTRAL_BIBLIOGRAPHY)
+        format(config.bibliography, config)
         # Reload central bibliography with new entries
-        central = bibtexparser.parse_file(CENTRAL_BIBLIOGRAPHY)
+        central = bibtexparser.parse_file(config.bibliography)
 
     # Print entries
     for key in keys:
@@ -661,11 +731,10 @@ def print_defined_aliases(central):
         title_key = next((k for k in entry.fields_dict if k.lower() == "title"), None)
         if title_key:
             title = entry[title_key].strip("{}")  # Remove braces from title
-        rich.print(f"[green]{alias}[/green] → {entry.key} ({authors}: {title})")
+        rich.print(f"[green]{alias}[/green] \u2192 {entry.key} ({authors}: {title})")
     return
 
 
-def handle_aliases(central, operation_args):
 # ---------------------------------------------------------------------------
 # bibitems conversion (uses the biblatex2bibitem LaTeX package)
 # ---------------------------------------------------------------------------
@@ -768,8 +837,10 @@ def bibitems(bib_file: str | None, config: BibgetterConfig):
         print(text[start:].rstrip())
 
 
+def handle_aliases(central, operation_args, config: BibgetterConfig):
     """
-    Handle the alias operation for managing bibliography key aliases by adding them to the 'ids' field.
+    Handle the alias operation for managing bibliography key aliases by adding
+    them to the ``ids`` field.
     """
     # If no arguments provided, print existing aliases from ids fields
     if len(operation_args) == 0:
@@ -793,13 +864,13 @@ def bibitems(bib_file: str | None, config: BibgetterConfig):
         rich.print(
             f"[yellow]Target '{target}' not found in central bibliography. Attempting to add it..."
         )
-        touched = add_entries([target], central)
+        touched = add_entries([target], central, config)
         if touched:
-            format(CENTRAL_BIBLIOGRAPHY)
+            format(config.bibliography, config)
             rich.print(
                 f"[green]Successfully added target '{target}' to central bibliography"
             )
-            central = bibtexparser.parse_file(CENTRAL_BIBLIOGRAPHY)
+            central = bibtexparser.parse_file(config.bibliography)
             target_entry = find_entry(target, central)
             if not target_entry:
                 rich.print(
@@ -822,77 +893,84 @@ def bibitems(bib_file: str | None, config: BibgetterConfig):
         target_entry["ids"] = f"{alias}"
 
     # Write back the updated bibliography
-    with open(CENTRAL_BIBLIOGRAPHY, "w") as f:
+    with open(config.bibliography, "w") as f:
         bibtexparser.write_file(f, central)
-        format(CENTRAL_BIBLIOGRAPHY)
+        format(config.bibliography, config)
 
-    rich.print(f"[green]Added alias: {alias} → {target}")
+    rich.print(f"[green]Added alias: {alias} \u2192 {target}")
     print(substitute_bibtex_key(target_entry.raw, alias))
 
 
 def main(fake_args=None):
     parser = argparse.ArgumentParser(description="bibgetter")
     parser.add_argument(
-        "operation", help="Operation to perform (add/sync/pull/get/alias)", nargs="*"
+        "operation",
+        help="Operation to perform (add/sync/pull/get/alias/bibitems)",
+        nargs="*",
     )
-    parser.add_argument("--file", help=".aux file", type=str)
+    parser.add_argument(
+        "--file",
+        help=".aux file(s); accepts multiple paths and shell globs",
+        type=str,
+        nargs="+",
+    )
     parser.add_argument("--local", help="local bibliography file", type=str)
     parser.add_argument(
         "--data-directory", help="bibgetter directory location", type=str
     )
     args = parser.parse_args(fake_args)
 
-    # Update BIBGETTER_DIRECTORY if --data-directory is provided
-    global BIBGETTER_DIRECTORY
-    if args.data_directory:
-        BIBGETTER_DIRECTORY = args.data_directory
-        global CENTRAL_BIBLIOGRAPHY, CENTRAL_CONFIGURATION
-        CENTRAL_BIBLIOGRAPHY = os.path.join(BIBGETTER_DIRECTORY, "bibliography.bib")
-        CENTRAL_CONFIGURATION = os.path.join(
-            BIBGETTER_DIRECTORY, "biber-formatting.conf"
-        )
+    # Build the immutable config object (no global mutation).
+    config = (
+        BibgetterConfig.from_directory(args.data_directory)
+        if args.data_directory
+        else BibgetterConfig()
+    )
 
-    if not args.operation or args.operation[0] not in [
-        "add",
-        "sync",
-        "pull",
-        "get",
-        "alias",
-    ]:
+    valid_operations = ["add", "sync", "pull", "get", "alias", "bibitems"]
+
+    if not args.operation or args.operation[0] not in valid_operations:
         if not args.operation:
             rich.print("[red]No operation provided to bibgetter.")
         else:
             rich.print("[red]Invalid operation provided.")
         rich.print("Allowed operations:")
-        rich.print("  [green]add[/green]   - Add entries to central bibliography")
+        rich.print("  [green]add[/green]      - Add entries to central bibliography")
         rich.print(
-            "  [green]sync[/green]  - Sync entries from central to local bibliography"
+            "  [green]sync[/green]     - Sync entries from central to local bibliography"
         )
         rich.print(
-            "  [green]pull[/green]  - Add entries to central and sync to local bibliography"
+            "  [green]pull[/green]     - Add entries to central and sync to local bibliography"
         )
-        rich.print("  [green]get[/green]   - Print entries from central bibliography")
-        rich.print("  [green]alias[/green] - Manage bibliography key aliases")
+        rich.print(
+            "  [green]get[/green]      - Print entries from central bibliography"
+        )
+        rich.print("  [green]alias[/green]    - Manage bibliography key aliases")
+        rich.print(
+            "  [green]bibitems[/green] - Convert bibliography to \\bibitem commands"
+        )
         return
 
-    # on first run (and all subsequent runs) of bibgetter, try to write configuration
-    write_configuration()
+    # On first run (and all subsequent runs) of bibgetter, write configuration.
+    write_configuration(config)
 
-    # read the central bibliography file
+    # Read the central bibliography file.
     central = None
     try:
-        central = bibtexparser.parse_file(CENTRAL_BIBLIOGRAPHY)
+        central = bibtexparser.parse_file(config.bibliography)
     except FileNotFoundError:
         pass
 
     if args.operation[0] == "alias":
-        handle_aliases(central, args.operation[1:])
+        handle_aliases(central, args.operation[1:], config)
+        return
+
     if args.operation[0] == "bibitems":
         bib_file = args.operation[1] if len(args.operation) > 1 else None
         bibitems(bib_file, config)
         return
 
-    # read the local bibliography file (if specified)
+    # Read the local bibliography file (if specified).
     local = None
     if args.local:
         try:
@@ -900,22 +978,23 @@ def main(fake_args=None):
         except FileNotFoundError:
             pass
 
-    # the keys of the entries to fetch: commandline arguments and from the .aux file(s)
+    # Collect keys: from command-line arguments and from .aux file(s).
     keys = []
 
-    # if args.file is present, read the file(s) and look for citations
     if args.file:
-        for filename in glob.glob(args.file):
-            with open(filename) as f:
-                keys.extend(get_citations(f.read()))
-                pass
+        for pattern in args.file:
+            for filename in glob.glob(pattern):
+                with open(filename) as fh:
+                    keys.extend(
+                        get_citations(fh.read(), base_dir=os.path.dirname(filename))
+                    )
 
     if args.operation[0] not in ["add", "sync", "pull", "get", "format"]:
         raise ValueError(
             "Invalid operation. Only operations are: add, sync, pull, get, format."
         )
 
-    # add the keys from the commandline arguments
+    # Add the keys from the command-line arguments.
     keys.extend(args.operation[1:])
     keys = list(set(keys))
 
@@ -927,30 +1006,30 @@ def main(fake_args=None):
 
     if args.operation[0] == "get":
         # TODO: support local bibliography file here
-        get_entries(keys, central)
+        get_entries(keys, central, config)
         return
 
     if args.operation[0] == "add":
-        touched = add_entries(keys, central)
+        touched = add_entries(keys, central, config)
         if touched > 0:
-            format(CENTRAL_BIBLIOGRAPHY)
+            format(config.bibliography, config)
 
     if args.operation[0] == "sync":
         sync_entries(keys, central, local, filename=target)
 
     if args.operation[0] == "pull":
-        touched = add_entries(keys, central)
+        touched = add_entries(keys, central, config)
         if touched > 0:
-            format(CENTRAL_BIBLIOGRAPHY)
+            format(config.bibliography, config)
 
-        # reread the central bibliography file
-        central = bibtexparser.parse_file(CENTRAL_BIBLIOGRAPHY)
+        # Reread the central bibliography file.
+        central = bibtexparser.parse_file(config.bibliography)
         sync_entries(keys, central, local, filename=target)
 
     if args.operation[0] == "format":
         if target is None:
-            target = CENTRAL_BIBLIOGRAPHY
-        format(filename=target)
+            target = config.bibliography
+        format(filename=target, config=config)
 
 
 if __name__ == "__main__":
