@@ -666,6 +666,108 @@ def print_defined_aliases(central):
 
 
 def handle_aliases(central, operation_args):
+# ---------------------------------------------------------------------------
+# bibitems conversion (uses the biblatex2bibitem LaTeX package)
+# ---------------------------------------------------------------------------
+
+
+def bibitems(bib_file: str | None, config: BibgetterConfig):
+    r"""
+    Convert a ``.bib`` file to a list of ``\bibitem`` commands and print them
+    to stdout.
+
+    Uses the `biblatex2bibitem <https://gitlab.com/Nickkolok/biblatex2bibitem>`_
+    LaTeX package, which renders ``\bibitem`` source code as verbatim text in a
+    PDF.  The text is then extracted via **pdftotext** (part of poppler-utils).
+
+    Requires:
+
+    * ``pdflatex`` (from any TeX distribution)
+    * ``biber``
+    * ``pdftotext`` (``brew install poppler`` / ``apt install poppler-utils``)
+    * The ``biblatex2bibitem`` LaTeX package (on CTAN / TeX Live)
+
+    Args:
+        bib_file: Path to the ``.bib`` file to convert.  Pass ``None`` to use
+                  the central bibliography.
+        config:   Paths configuration object.
+    """
+    if bib_file is None:
+        bib_file = config.bibliography
+
+    if not os.path.isfile(bib_file):
+        rich.print(f"[red]File not found: {bib_file}")
+        return
+
+    missing_tools = [
+        t for t in ("pdflatex", "biber", "pdftotext") if shutil.which(t) is None
+    ]
+    if missing_tools:
+        for tool in missing_tools:
+            rich.print(f"[red]Required tool not found: [bold]{tool}")
+        rich.print(
+            "  pdflatex / biber : install a TeX distribution (e.g. TeX Live)\n"
+            "  pdftotext        : brew install poppler  /  apt install poppler-utils"
+        )
+        return
+
+    tex_source = (
+        r"\documentclass{article}" + "\n"
+        r"\usepackage[backend=biber]{biblatex}" + "\n"
+        r"\addbibresource{refs.bib}" + "\n"
+        r"\usepackage{biblatex2bibitem}" + "\n"
+        r"\begin{document}" + "\n"
+        r"\nocite{*}" + "\n"
+        r"\printbibitembibliography" + "\n"
+        r"\end{document}" + "\n"
+    )
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        shutil.copy(bib_file, os.path.join(tmpdir, "refs.bib"))
+
+        with open(os.path.join(tmpdir, "main.tex"), "w") as fh:
+            fh.write(tex_source)
+
+        for cmd in (
+            ["pdflatex", "-interaction=nonstopmode", "main.tex"],
+            ["biber", "main"],
+            ["pdflatex", "-interaction=nonstopmode", "main.tex"],
+        ):
+            subprocess.call(
+                cmd,
+                cwd=tmpdir,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+
+        pdf_file = os.path.join(tmpdir, "main.pdf")
+        if not os.path.isfile(pdf_file):
+            rich.print(
+                "[red]PDF generation failed.  Make sure the biblatex2bibitem"
+                " LaTeX package is installed (CTAN: biblatex2bibitem)."
+            )
+            return
+
+        result = subprocess.run(
+            ["pdftotext", "-layout", pdf_file, "-"],
+            capture_output=True,
+            text=True,
+            cwd=tmpdir,
+        )
+        text = result.stdout
+
+        # biblatex2bibitem renders \bibitem commands as verbatim text in the
+        # PDF.  Locate the first occurrence and print everything from there.
+        start = text.find("\\bibitem")
+        if start == -1:
+            rich.print(
+                "[yellow]No \\\\bibitem commands found in PDF output.\n"
+                "Check that biblatex2bibitem rendered the bibliography."
+            )
+            return
+        print(text[start:].rstrip())
+
+
     """
     Handle the alias operation for managing bibliography key aliases by adding them to the 'ids' field.
     """
@@ -785,6 +887,9 @@ def main(fake_args=None):
 
     if args.operation[0] == "alias":
         handle_aliases(central, args.operation[1:])
+    if args.operation[0] == "bibitems":
+        bib_file = args.operation[1] if len(args.operation) > 1 else None
+        bibitems(bib_file, config)
         return
 
     # read the local bibliography file (if specified)
