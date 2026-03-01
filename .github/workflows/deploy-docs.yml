@@ -1,0 +1,22 @@
+name: deploy docs
+
+on:
+  push:
+    branches: ["master", "main"]
+
+jobs:
+  deploy:
+    name: deploy README to bibgetter.github.io
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy README to bibgetter.github.io
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          external_repository: bibgetter/bibgetter.github.io
+          publish_branch: main
+          publish_dir: .
+          include_patterns: |
+            README.markdown
