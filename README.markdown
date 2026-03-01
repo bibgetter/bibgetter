@@ -11,11 +11,19 @@ It is best to install it using `pipx`, which is a clean way to install Python ap
 
 As an end user, the best solution is likely to run
 
-`pipx install git+https://github.com/bibgetter/bibgetter`
+`pipx install --preinstall "bibtexparser>=2.0.0b8" git+https://github.com/bibgetter/bibgetter`
 
 As a developer (so this is a reminder to myself, mostly), it is
 
 `pipx install --editable --force .`
+
+### Note
+
+The `--preinstall "bibtexparser>=2.0.0b8"` option in the installation command
+is a workaround to force the use of `bibtexparser v2.x`.
+If removed, `pipx` will default
+to installing `bibtexparser v1.x`, 
+wihch is incompatible with `bibgetter`.
 
 ## Workflow
 

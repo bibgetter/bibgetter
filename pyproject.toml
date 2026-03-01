@@ -2,7 +2,7 @@
 name = "bibgetter"
 version = "2.0.1"
 authors = [
-  { name="Pieter Belmans", email="pieterbelmans@gmail.com " },
+  { name="Pieter Belmans", email="pieterbelmans@gmail.com" },
 ]
 description = "Retrieve and manage Bib(La)TeX entries"
 readme = "README.md"

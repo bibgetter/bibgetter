@@ -137,7 +137,7 @@ def arxiv2biblatex(key, entry):
         f"  year        = {{{entry.updated.year}}},\n"
         f"  eprinttype  = {{arxiv}},\n"
         f"  eprint      = {{{id}}},\n"
-        f"  ids         = {{{id if key != id else ""}}},\n"
+        f"  ids         = {{{id if key != id else ''}}},\n"
         f"  eprintclass = {{{entry.primary_category}}},\n"
         f"}}\n"
     )
@@ -190,8 +190,10 @@ def get_arxiv(ids):
     # get rid of arXiv: prefix if needed
     ids = [id.split(":")[-1] for id in ids]
 
-    entries = arxiv.Client().results(arxiv.Search(id_list=list(ids)))
-    entries = list(map(arxiv2biblatex, ids, entries))
+    entries = []
+    for id in ids:
+      entry = arxiv.Client().results(arxiv.Search(id_list=list([id])))
+      entries.append(arxiv2biblatex(id, next(entry)))
 
     return "\n".join(entries)
 
@@ -208,7 +210,7 @@ def clean_mathscinet_entry(entry):
     # if numerical part of key less than 7 characters, add long version as alternative
     key = lines[0].split("MR")[1][:-1]
     if len(key) < 7:
-        long = f"{key.rjust(7, "0")}"
+        long = f"{key.rjust(7, '0')}"
         lines = [lines[0].replace(key, long)] + [f"  IDS = {{MR{key}}},"] + lines[1:]
 
     return "\n".join(lines)
@@ -341,7 +343,7 @@ def bibliography_keys(bibliography) -> list:
     return defaults + alternatives
 
 
-def add_entries(keys, central):
+ddef add_entries(keys, central) -> int:
     """
     Add entries to the central bibliography.
 
@@ -358,10 +360,10 @@ def add_entries(keys, central):
     )
 
     if not missing:
-        return False
+        return 0
 
     rich.print(
-        f"Looking up {len(missing)} {"entry" if len(missing) == 1 else "entries"}"
+        f"Looking up {len(missing)} {'entry' if len(missing) == 1 else 'entries'}"
     )
 
     written = []
@@ -390,7 +392,7 @@ def add_entries(keys, central):
                     matched.append(id)
         missing = sorted([id for id in missing if id not in matched])
 
-        if not matched:
+        if len(matched) == 0:
             continue
 
         action_failed = False
@@ -433,7 +435,7 @@ def add_entries(keys, central):
     return len(written)
 
 
-def sync_entries(keys, central, local, filename=None):
+def sync_entries(keys, central, local, filename=None) -> int:
     """
     Synchronize entries from central to local
 
@@ -444,7 +446,7 @@ def sync_entries(keys, central, local, filename=None):
     missing = [key for key in keys if key not in bibliography_keys(local)]
 
     rich.print(f"{len(missing)} [default not bold]key(s) not yet in local file")
-    if not len(missing):
+    if len(missing) == 0:
         return 0
 
     entries = []
@@ -465,7 +467,7 @@ def sync_entries(keys, central, local, filename=None):
             f.write("\n" + "\n\n".join(entry.raw for entry in entries))
             rich.print(
                 f"[green]Wrote {len(entries)}"
-                f" {"entry" if len(missing) == 1 else "entries"} to local file"
+                f" {'entry' if len(missing) == 1 else 'entries'} to local file"
             )
 
     return len(entries)
@@ -711,6 +713,10 @@ def main(fake_args=None):
                 keys.extend(get_citations(f.read()))
                 pass
 
+    if args.operation[0] not in ["add", "sync", "pull", "format"]:
+        raise (ValueError("Invalid operation. Only operations are: add, sync, pull, format."))
+        return
+
     # add the keys from the commandline arguments
     keys.extend(args.operation[1:])
     keys = list(set(keys))
@@ -728,7 +734,7 @@ def main(fake_args=None):
 
     if args.operation[0] == "add":
         touched = add_entries(keys, central)
-        if touched:
+        if touched > 0:
             format(CENTRAL_BIBLIOGRAPHY)
 
     if args.operation[0] == "sync":
@@ -736,12 +742,19 @@ def main(fake_args=None):
 
     if args.operation[0] == "pull":
         touched = add_entries(keys, central)
-        if touched:
+        if touched > 0:
             format(CENTRAL_BIBLIOGRAPHY)
 
         # reread the central bibliography file
         central = bibtexparser.parse_file(CENTRAL_BIBLIOGRAPHY)
         sync_entries(keys, central, local, filename=target)
+
+    if args.operation[0] == "format":
+        if target is None:
+            target = CENTRAL_BIBLIOGRAPHY
+        format(filename=target)
+
+
 
 if __name__ == "__main__":
     main()
