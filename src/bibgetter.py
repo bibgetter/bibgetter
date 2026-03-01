@@ -249,6 +249,16 @@ def get_mathscinet(ids):
 
 
 def clean_doi_entry(entry, doi):
+    """
+    Clean a raw BibTeX entry returned by the CrossRef API.
+
+    Performs the following transformations:
+    * Rewrites the record key to the (sanitised) DOI.
+    * Upgrades http links to https.
+    * Removes the ``publisher`` field from ``@article`` entries because
+      CrossRef often includes it while biber's default datamodel does not,
+      producing validation warnings.
+    """
     # Parse the entry to modify it
     bib = bibtexparser.parse_string(entry)
     entry = bib.entries[0]
@@ -262,6 +272,15 @@ def clean_doi_entry(entry, doi):
     if isinstance(guessed_doi, dict) and "bibtex_id" in guessed_doi:
         doi = guessed_doi["bibtex_id"]
     lines[0] = lines[0].replace(entry.key, doi)
+    # CrossRef includes a publisher field on @article entries, which biber's
+    # default data model does not allow there (only on @book and related types).
+    # Remove it to avoid --validate-datamodel warnings.
+    if entry.entry_type.lower() == "article":
+        lines = [
+            line
+            for line in lines
+            if not re.match(r"^\s*publisher\s*=", line, re.IGNORECASE)
+        ]
 
     return "\n".join(lines)
 
@@ -498,8 +517,18 @@ def format(filename):
     """
     Format the bibliography file using biber.
 
-    This is like running black on a Python file: an opinionated formattr.
-    It will sort the entries, normalize ISBNs, and so on.
+    This is like running black on a Python file: an opinionated formatter.
+    It will sort the entries, normalize ISBNs, ensure consistent field case,
+    and so on.
+
+    Flags used:
+      --output-legacy-dates  keep ``year`` as-is instead of converting to
+                             biber's canonical ``date`` field.
+      --output-safechars     use ASCII-safe character representations.
+      --fixinits             normalise author initials.
+      --isbn-normalise       normalise ISBN formatting.
+    The biber-formatting.conf configuration additionally preserves ``journal``
+    (rather than converting to ``journaltitle``) and sorts entries by key.
     """
     subprocess.call(
         [
@@ -510,6 +539,7 @@ def format(filename):
             "--isbn-normalise",
             "--output_encoding=ascii",
             "--output-align",
+            "--output-legacy-dates",
             f"--configfile={CENTRAL_CONFIGURATION}",
             "--validate-datamodel",
             f"--output_file={filename}",
