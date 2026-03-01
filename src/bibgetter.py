@@ -500,7 +500,7 @@ def add_entries(keys, central, config: BibgetterConfig) -> int:
         if not action_failed:
             rich.print(
                 f"Added {len(matched)}"
-                f" {"entry" if len(matched) == 1 else "entries"} from {type}"
+                f" {'entry' if len(matched) == 1 else 'entries'} from {type}"
             )
             rich.print(
                 rich.padding.Padding(
