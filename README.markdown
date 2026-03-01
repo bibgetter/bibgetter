@@ -10,6 +10,13 @@ making bibliography management easier.
 You can also read this documentation online
 at [`bibgetter.github.io`](https://bibgetter.github.io).
 
+## Quick navigation
+
+- [**Installation**](#installation)  
+- [**Operations**](#operations): [`add`](#bibgetter-add), [`get`](#bibgetter-get), [`sync`](#bibgetter-sync), [`pull`](#bibgetter-pull), [`alias`](#bibgetter-alias), [`bibitems`](#bibgetter-bibitems)  
+- [**Workflow & identifier types**](#workflow)  
+- [**Biber formatting**](#biber-formatting)  
+
 ## Installation
 
 It is best to install it using `pipx`, which is a clean way to install Python
