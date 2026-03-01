@@ -1,0 +1,62 @@
+name: tests
+
+on:
+  push:
+    branches: ["master", "main"]
+  pull_request:
+
+jobs:
+  lint:
+    name: black
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install black>=24.0.0
+      - run: black --check src/ tests/
+
+  unit:
+    name: unit tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install bibgetter and dev dependencies
+        run: |
+          pip install --pre "bibtexparser>=2.0.0b8"
+          pip install -e ".[dev]"
+      - name: Run unit tests (no network)
+        run: >
+          python -m pytest tests/ -q
+          -k "not (get_dois or add_various or alias or arxiv_multiple
+               or central_bibliography or add_does_not or format_preserves
+               or test_get_is)"
+
+  integration:
+    name: integration tests (network)
+    runs-on: ubuntu-latest
+    # Only on push to master/main – not on every pull request, to avoid
+    # hammering external APIs and to keep PR checks fast.
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install biber
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y biber
+      - name: Install bibgetter and dev dependencies
+        run: |
+          pip install --pre "bibtexparser>=2.0.0b8"
+          pip install -e ".[dev]"
+      - name: Run full test suite
+        run: python -m pytest tests/ -q
