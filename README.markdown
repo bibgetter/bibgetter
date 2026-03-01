@@ -1,102 +1,196 @@
-# Introduction
+# bibgetter
 
-`bibgetter` is a tool for mathematicians writing papers in LaTeX,
+[![tests](https://github.com/bibgetter/bibgetter/actions/workflows/tests.yml/badge.svg)](https://github.com/bibgetter/bibgetter/actions/workflows/tests.yml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](https://opensource.org/licenses/MIT)
+[![code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+
+`bibgetter` is a command-line tool for mathematicians writing papers in LaTeX,
 making bibliography management easier.
 You can also read this documentation online
-at [`bibgetter.github.io`](htps://bibgetter.github.io).
+at [`bibgetter.github.io`](https://bibgetter.github.io).
 
 ## Installation
 
-It is best to install it using `pipx`, which is a clean way to install Python applications.
+It is best to install it using `pipx`, which is a clean way to install Python
+applications.
 
 As an end user, the best solution is likely to run
 
-`pipx install --preinstall "bibtexparser>=2.0.0b8" git+https://github.com/bibgetter/bibgetter`
+```bash
+pipx install --preinstall "bibtexparser>=2.0.0b8" git+https://github.com/bibgetter/bibgetter
+```
 
 As a developer (so this is a reminder to myself, mostly), it is
 
-`pipx install --editable --force .`
+```bash
+pipx install --editable --force .
+```
 
-### Note
+### Note on the `bibtexparser` version
 
-The `--preinstall "bibtexparser>=2.0.0b8"` option in the installation command
-is a workaround to force the use of `bibtexparser v2.x`.
-If removed, `pipx` will default
-to installing `bibtexparser v1.x`, 
-wihch is incompatible with `bibgetter`.
+The `--preinstall "bibtexparser>=2.0.0b8"` option is a workaround to force the
+use of `bibtexparser v2.x`.  As of early 2026 only pre-release (`2.0.0b9`)
+versions of bibtexparser v2 are on PyPI;  `pip install bibtexparser` without
+`--pre` installs the incompatible v1.4.x series.
 
 ## Workflow
 
-There is a central BibLaTeX file, located at `~/.bibgetter/bibliography.bib` which acts as
-a central repository for bibliography entries.
+There is a central BibLaTeX file at `~/.bibgetter/bibliography.bib`
+that acts as a single repository for all bibliography entries.  Once an entry
+is in the central file it can be copied to any local project without a further
+network request.
 
-### Adding entries
+## Supported identifier types
 
-* `bibgetter add` adds entries to the central file in an automated way
+| Source | Raw ID | URL form |
+|--------|--------|----------|
+| **arXiv** | `2411.14814`, `arXiv:math/0309136` | `https://arxiv.org/abs/2411.14814` |
+| **MathSciNet** | `MR4865600` | `https://mathscinet.ams.org/mathscinet/relay-station?mr=4865600` |
+| **DOI** | `10.4007/annals.2013.178.1.3` | `https://doi.org/10.4007/annals.2013.178.1.3` |
 
-One can add entries to this file in the following ways:
+URLs are accepted everywhere a raw ID is accepted; `bibgetter` extracts the
+canonical ID automatically.
 
-1) by hand (and indeed, the whole point is that you curate a single file, once)
-2) by specifying arXiv, MathSciNet, or DOI ids or URLs
-3) by specifying an .aux file (or files), scanning for bibliography keys being used
+## Operations
 
-An example of the second option:
+### `bibgetter add` — add entries to the central file
 
-`bibgetter add 2411.14814 MR1234567 https://doi.org/10.4171/owr/2024/44`
+```
+bibgetter add <id-or-url> [<id-or-url> ...]
+bibgetter add --file article.aux [chapter1.aux ...]
+```
 
-An example of the third option:
+Fetches BibLaTeX records and appends them to the central bibliography.
+Already-present entries are silently skipped (no redundant network requests).
 
-`bibgetter add --file article.aux`
+**From `.aux` files:** `--file` accepts one or more paths (including shell
+globs, e.g. `--file latex.out/*.aux`).  All of the following citation commands
+found in the file are recognised:
 
-If an entry is missing, it will make an API call.
+| Command | Source |
+|---------|--------|
+| `\citation{key}` | standard BibTeX, natbib, apacite, … |
+| `\abx@aux@cite{0}{key}` | biblatex (current, with refsection argument) |
+| `\abx@aux@cite{key}` | biblatex (older format) |
+| `\@input{child.aux}` | nested aux files from `\include{}` (parsed recursively) |
 
-### Accessing entries
+### `bibgetter get` — print entries to stdout
 
-* `bibgetter get` prints bibliography entries from the central file
+```
+bibgetter get <id-or-url> [<id-or-url> ...]
+```
 
-If the entry is not found, it will be automatically added. You can use this to automate
-getting bibtex records from the internet in the command line. An example:
+Prints BibLaTeX records to stdout.
+If an entry is not yet in the central file it is fetched automatically first.
 
-`bibgetter get 'https://doi.org/10.1017/is008004024jkt010'`
+### `bibgetter sync` — copy entries to a local bibliography file
 
-will print the bibtex record for Rouquier's paper. You can request multiple entries at 
-once.
+```
+bibgetter sync --file article.aux --local bibliography.bib
+bibgetter sync <key> [<key> ...] --local bibliography.bib
+```
 
+Copies entries from the central file to a local `bibliography.bib`, adding only
+those that are not already present.
 
-### Transferring entries
+> **Guaranteed offline** once the central file is populated.
 
-* `bibgetter sync` transfers entries from the central file to a local file
+### `bibgetter pull` — add and sync in one step
 
-It takes as input a list of entries that should exist in the local file, but maybe don't.
-It then looks for these in the central file, and if present, copies them to the local file.
-It will not overwrite existing entries.
+```
+bibgetter pull --file article.aux --local bibliography.bib
+```
 
-The anticipated use case is the following:
+Equivalent to `add` followed by `sync`.  Typical build workflow:
 
-`bibgetter sync --file article.aux --local bibliography.bib`
+```bash
+bibgetter pull --file article.aux --local bibliography.bib
+pdflatex article
+biber article
+pdflatex article
+```
 
-This option is guaranteed to work offline.
+### `bibgetter alias` — manage key aliases
 
-### Both at once
+```
+bibgetter alias <alias> <target-id-or-url>
+bibgetter alias
+```
 
-* `bibgetter pull` is the combination of `bibgetter add` and `bibgetter sync`
+Adds a human-readable alias stored in the BibLaTeX `ids` field, which biber
+recognises as an alternative key.
 
-So most likely you want to have something like
+```bash
+bibgetter alias rouquier-dimension MR2183393
+bibgetter get rouquier-dimension   # prints entry renamed to the alias
+bibgetter alias                    # lists all defined aliases
+```
 
-`bibgetter pull --file article.aux --local bibliography.bib`
+### `bibgetter bibitems` — convert to `\bibitem` list
 
-in your toolchain.
+```
+bibgetter bibitems [file.bib]
+```
 
-### Adding aliases
+Converts a `.bib` file to a list of `\bibitem` commands suitable for pasting
+into a journal submission that does not accept BibLaTeX.  Uses the
+[biblatex2bibitem](https://gitlab.com/Nickkolok/biblatex2bibitem) LaTeX
+package.
 
-* `bibgetter alias` adds aliases for bibliography items to the central file
+```bash
+bibgetter bibitems                     # convert central bibliography
+bibgetter bibitems local.bib           # convert a specific file
+```
 
-You can add an alias to an entry by running
+> **Requires:** `pdflatex`, `biber`, `pdftotext` (poppler-utils), and the
+> `biblatex2bibitem` LaTeX package (on CTAN / TeX Live).
 
-`bibgetter alias rouquier-dimension 'https://doi.org/10.1017/is008004024jkt010'
+## Biber formatting
 
-Then you can use `bibgetter get rouquier-dimension` to get the bibtex record for
-this paper. The paper will be added to the central file if it is not already there.
+After every write to the central bibliography `bibgetter` runs `biber --tool`
+to normalise the file.  This:
 
-Run `bibgetter alias` to print all defined aliases. Advanced operations (editing,
-deleting) can only be done by editing the central bibliography file directly.
+* sorts entries alphabetically by key;
+* normalises ISBN formatting;
+* standardises author initials;
+* encodes non-ASCII characters as ASCII-safe equivalents;
+* aligns field values for readability;
+* validates the data model and reports unexpected fields.
+
+The configuration is stored in `~/.bibgetter/biber-formatting.conf` (copied
+from the package on first run).  Notable behaviour:
+
+| Behaviour | How |
+|-----------|-----|
+| Field names are **lowercased** | `<output_fieldcase>lower</output_fieldcase>` in conf |
+| **`year`** is preserved (not renamed to `date`) | `--output-legacy-dates` CLI flag |
+| **`journal`** is preserved (not renamed to `journaltitle`) | `<sourcemap>` in conf |
+
+You can edit the conf file to customise biber's behaviour.  The flags
+`--output-safechars`, `--fixinits`, `--isbn-normalise`, and
+`--output-legacy-dates` are passed by `bibgetter` on the command line and
+cannot be overridden via the configuration file.
+
+## The central bibliography file
+
+The central file lives at `~/.bibgetter/bibliography.bib` by default.
+Use `--data-directory <path>` to override this for testing or multiple
+projects:
+
+```bash
+bibgetter add 2307.15338 --data-directory /path/to/project/.bibgetter
+```
+
+### MathSciNet record keys
+
+MathSciNet keys are zero-padded to 7 digits (e.g. `MR0012345` rather than
+`MR12345`).  The short form is preserved in the `ids` field so that citations
+using either form resolve correctly.
+
+### DOIs with special characters
+
+Some DOIs contain characters (e.g. parentheses) that are invalid in BibTeX
+record keys.  `bibgetter` strips those from the key while preserving the
+original DOI in the `doi` field.
+
