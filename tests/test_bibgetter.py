@@ -123,6 +123,48 @@ def test_get_citations_no_base_dir_ignores_nested():
     assert len(keys) == 1
 
 
+def test_get_citations_handles_non_utf8_bytes(tmp_path):
+    r"""get_citations gracefully handles files with non-UTF-8 bytes.
+
+    LaTeX-generated .aux and .fls files can contain binary data from PDF
+    references or other sources, causing UnicodeDecodeError without proper
+    error handling. This test verifies the fix works for both the main file
+    and nested \@input{} references.
+    """
+    # Create an aux file with valid citations and some non-UTF-8 bytes
+    # (simulating real-world LaTeX output that may contain binary data)
+    aux_content = rb"\citation{test-key}" + b"\xb9\xbb\xbc" + rb"\citation{second-key}"
+    aux_file = tmp_path / "test.aux"
+    aux_file.write_bytes(aux_content)
+
+    # Should extract citations despite the non-UTF-8 bytes
+    keys = get_citations(
+        aux_file.read_text(encoding="utf-8", errors="replace"), base_dir=None
+    )
+    assert "test-key" in keys
+    assert "second-key" in keys
+
+    # Also test with nested aux files
+    child_aux = tmp_path / "child.aux"
+    child_aux.write_bytes(
+        rb"\citation{child-key}" + b"\xb9" + rb"\citation{another-key}"
+    )
+
+    parent_content = rb"\@input{child.aux}" + b"\xbb" + rb"\citation{parent-key}"
+    parent_file = tmp_path / "parent.aux"
+    parent_file.write_bytes(parent_content)
+
+    # Read the parent file with error handling and extract citations
+    keys = get_citations(
+        parent_file.read_text(encoding="utf-8", errors="replace"),
+        base_dir=str(tmp_path),
+    )
+    # Should find all citations from both files
+    assert "parent-key" in keys
+    assert "child-key" in keys
+    assert "another-key" in keys
+
+
 # ---------------------------------------------------------------------------
 # --file with multiple aux files (nargs='+')
 # ---------------------------------------------------------------------------
@@ -151,6 +193,43 @@ def test_add_multiple_aux_files(temp_bibgetter_dir, tmp_path, capsys):
     output = capsys.readouterr().out
     # bibgetter should report considering 2 keys
     assert "Considering 2" in output
+
+
+def test_pull_with_non_utf8_aux_file(temp_bibgetter_dir, tmp_path, capsys):
+    """--file handles aux files with non-UTF-8 bytes without crashing."""
+    # Create an aux file with non-UTF-8 bytes (like real LaTeX output)
+    aux_file = tmp_path / "test.aux"
+    aux_content = rb"\citation{dummy-key-1}" + b"\xb9\xbb" + rb"\citation{dummy-key-2)"
+    aux_file.write_bytes(aux_content)
+
+    # Create an empty central bibliography file so pull doesn't error
+    import os
+
+    central_bib = os.path.join(temp_bibgetter_dir, "bibliography.bib")
+    with open(central_bib, "w") as f:
+        f.write("")
+
+    # Create an empty local bibliography file
+    local_bib = tmp_path / "bibliography.bib"
+    local_bib.write_text("")
+
+    # This should not crash with UnicodeDecodeError when reading the aux file
+    main(
+        [
+            "pull",
+            "--file",
+            str(aux_file),
+            "--local",
+            str(local_bib),
+            "--data-directory",
+            temp_bibgetter_dir,
+        ]
+    )
+    output = capsys.readouterr().out
+    # Should have processed the file and reported considering keys
+    # (even though the keys are unrecognizable, the important part is
+    # that it doesn't crash with UnicodeDecodeError)
+    assert "Considering" in output
 
 
 # ---------------------------------------------------------------------------

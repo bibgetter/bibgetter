@@ -224,7 +224,7 @@ def get_citations(content: str, base_dir: str | None = None) -> list:
             child_path = os.path.join(base_dir, child_name)
             if os.path.isfile(child_path):
                 try:
-                    with open(child_path) as fh:
+                    with open(child_path, encoding="utf-8", errors="replace") as fh:
                         keys.update(
                             get_citations(
                                 fh.read(), base_dir=os.path.dirname(child_path)
@@ -984,7 +984,7 @@ def main(fake_args=None):
     if args.file:
         for pattern in args.file:
             for filename in glob.glob(pattern):
-                with open(filename) as fh:
+                with open(filename, encoding="utf-8", errors="replace") as fh:
                     keys.extend(
                         get_citations(fh.read(), base_dir=os.path.dirname(filename))
                     )
