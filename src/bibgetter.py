@@ -927,7 +927,7 @@ def main(fake_args=None):
         else BibgetterConfig()
     )
 
-    valid_operations = ["add", "sync", "pull", "get", "alias", "bibitems"]
+    valid_operations = ["add", "sync", "pull", "get", "alias", "bibitems", "format"]
 
     if not args.operation or args.operation[0] not in valid_operations:
         if not args.operation:
@@ -948,6 +948,9 @@ def main(fake_args=None):
         rich.print("  [green]alias[/green]    - Manage bibliography key aliases")
         rich.print(
             "  [green]bibitems[/green] - Convert bibliography to \\bibitem commands"
+        )
+        rich.print(
+            "  [green]format[/green]   - Format central or local bibliography file"
         )
         return
 
