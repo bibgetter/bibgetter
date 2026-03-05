@@ -1001,7 +1001,9 @@ def main(fake_args=None):
     keys.extend(args.operation[1:])
     keys = list(set(keys))
 
-    rich.print(f"Considering {len(keys)} [default not bold]key(s)")
+    # Only print "Considering" message for operations that actually use keys.
+    if args.operation[0] != "format":
+        rich.print(f"Considering {len(keys)} [default not bold]key(s)")
 
     target = None
     if hasattr(args, "local"):
